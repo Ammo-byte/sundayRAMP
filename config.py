@@ -38,6 +38,17 @@ def _get_with_legacy(primary: str, legacy: str, default: str = "") -> str:
     return os.getenv(primary, os.getenv(legacy, default))
 
 
+def _is_valid_hhmm(value: str) -> bool:
+    """Return true when a config time string looks like HH:MM."""
+    try:
+        from datetime import datetime
+
+        datetime.strptime(value, "%H:%M")
+    except ValueError:
+        return False
+    return True
+
+
 class Config:
     """Single source of truth for all configuration."""
 
@@ -111,6 +122,15 @@ class Config:
     default_home_location: str = _get_with_legacy("DEFAULT_HOME_LOCATION", "MY_DEFAULT_LOCATION", "")
     default_home_lat: float | None = _get_optional_float("DEFAULT_HOME_LATITUDE")
     default_home_lng: float | None = _get_optional_float("DEFAULT_HOME_LONGITUDE")
+    default_work_location: str = os.getenv("DEFAULT_WORK_LOCATION", "")
+    default_work_lat: float | None = _get_optional_float("DEFAULT_WORK_LATITUDE")
+    default_work_lng: float | None = _get_optional_float("DEFAULT_WORK_LONGITUDE")
+    work_days: list[str] = _get_csv("WORK_DAYS", "mon,tue,wed,thu,fri")
+    workday_start_time: str = os.getenv("WORKDAY_START_TIME", "09:00")
+    workday_end_time: str = os.getenv("WORKDAY_END_TIME", "17:00")
+    current_location_lookahead_hours: float = float(
+        os.getenv("CURRENT_LOCATION_LOOKAHEAD_HOURS", "4")
+    )
     if default_home_lat is None:
         default_home_lat = _get_optional_float("MY_DEFAULT_LATITUDE")
     if default_home_lng is None:
@@ -199,6 +219,8 @@ class Config:
             errors.append("LLM_REQUESTS_PER_MINUTE must be at least 1 when set.")
         if cls.location_request_timeout_seconds < 1:
             errors.append("LOCATION_REQUEST_TIMEOUT_SECONDS must be at least 1.")
+        if cls.current_location_lookahead_hours <= 0:
+            errors.append("CURRENT_LOCATION_LOOKAHEAD_HOURS must be greater than 0.")
 
         if cls.telegram_token and not cls.telegram_chat_id:
             errors.append("TELEGRAM_CHAT_ID is required when TELEGRAM_BOT_TOKEN is set.")
@@ -224,16 +246,31 @@ class Config:
                 "cannot get travel-aware reminders until Maps is configured."
             )
 
-        if not cls.default_home_location:
+        if not cls.default_home_location and not cls.default_work_location:
             warnings.append(
-                "DEFAULT_HOME_LOCATION is not set. Travel estimation requires either "
-                "a live location update or a configured home location."
+                "DEFAULT_HOME_LOCATION and DEFAULT_WORK_LOCATION are not set. "
+                "Travel estimation requires a live location update or at least one configured default location."
             )
 
         if (cls.default_home_lat is None) != (cls.default_home_lng is None):
             warnings.append(
                 "DEFAULT_HOME_LATITUDE and DEFAULT_HOME_LONGITUDE should be set together "
                 "if you want coordinate-based defaults."
+            )
+        if (cls.default_work_lat is None) != (cls.default_work_lng is None):
+            warnings.append(
+                "DEFAULT_WORK_LATITUDE and DEFAULT_WORK_LONGITUDE should be set together "
+                "if you want coordinate-based work defaults."
+            )
+        if not _is_valid_hhmm(cls.workday_start_time):
+            errors.append("WORKDAY_START_TIME must use HH:MM 24-hour format.")
+        if not _is_valid_hhmm(cls.workday_end_time):
+            errors.append("WORKDAY_END_TIME must use HH:MM 24-hour format.")
+        valid_work_days = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+        invalid_work_days = [day for day in cls.work_days if day.lower() not in valid_work_days]
+        if invalid_work_days:
+            errors.append(
+                "WORK_DAYS must be a comma-separated list using mon,tue,wed,thu,fri,sat,sun."
             )
 
         return {"errors": errors, "warnings": warnings}

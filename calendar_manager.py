@@ -119,9 +119,30 @@ class CalendarManager:
         Raises:
             CalendarEventError: If the Calendar API request fails.
         """
+        return self.list_events_for_day()
+
+    def list_events_for_day(self, target_date: str | None = None) -> list[dict]:
+        """
+        Fetch calendar events for one local calendar day.
+
+        Args:
+            target_date: Local date in YYYY-MM-DD format. Defaults to today.
+
+        Raises:
+            CalendarEventError: If the Calendar API request fails.
+        """
         tz = ZoneInfo(Config.timezone)
-        now = datetime.now(tz)
-        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if target_date:
+            try:
+                day = datetime.strptime(target_date, "%Y-%m-%d")
+            except ValueError as exc:
+                raise CalendarEventError(
+                    f"Invalid target_date {target_date!r}; expected YYYY-MM-DD."
+                ) from exc
+            start_of_day = day.replace(tzinfo=tz)
+        else:
+            now = datetime.now(tz)
+            start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         end_of_day = start_of_day + timedelta(days=1)
 
         try:

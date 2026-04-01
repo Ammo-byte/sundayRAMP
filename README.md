@@ -84,6 +84,12 @@ Minimum working local setup:
 - `TELEGRAM_CHAT_ID`
 - `DEFAULT_HOME_LOCATION`
 
+Optional but recommended if you want smarter weekday travel inference:
+- `DEFAULT_WORK_LOCATION`
+- `WORK_DAYS`
+- `WORKDAY_START_TIME`
+- `WORKDAY_END_TIME`
+
 Recommended local defaults for Gemini or another free-tier provider:
 - `MAX_EMAILS_PER_CYCLE=3`
 - `LLM_RETRY_ATTEMPTS=4`
@@ -383,6 +389,7 @@ Set these in `config.env`:
 - `REQUEST_PHONE_LOCATION=true`
 - `LOCATION_REQUEST_BASE_URL=http://<your-mac-lan-ip>:8000`
 - `LOCATION_REQUEST_TIMEOUT_SECONDS=20`
+- `CURRENT_LOCATION_LOOKAHEAD_HOURS=4`
 
 Then run the local worker as usual:
 
@@ -428,7 +435,29 @@ JSON body:
 ```
 
 If the phone replies in time, travel estimates use that fresh GPS fix.
-If it does not, the app falls back to `DEFAULT_HOME_LOCATION`.
+If it does not, the app falls back to intelligent origin inference:
+- the latest scheduled calendar event location before the new event
+- otherwise `DEFAULT_WORK_LOCATION` during configured work hours
+- otherwise `DEFAULT_HOME_LOCATION`
+
+To enable work-aware travel inference, set these in `config.env`:
+- `DEFAULT_WORK_LOCATION`
+- `DEFAULT_WORK_LATITUDE`
+- `DEFAULT_WORK_LONGITUDE`
+- `WORK_DAYS`
+- `WORKDAY_START_TIME`
+- `WORKDAY_END_TIME`
+
+Example:
+
+```env
+DEFAULT_HOME_LOCATION=Champaign, IL
+DEFAULT_WORK_LOCATION=Siebel Center for Computer Science, Urbana, IL
+WORK_DAYS=mon,tue,wed,thu,fri
+WORKDAY_START_TIME=09:00
+WORKDAY_END_TIME=17:00
+CURRENT_LOCATION_LOOKAHEAD_HOURS=4
+```
 
 ### Manual live location updates
 
@@ -455,6 +484,7 @@ In Vercel environment variables, set:
 - your LLM key
 - your Telegram or iMessage settings
 - `DEFAULT_HOME_LOCATION`
+- `DEFAULT_WORK_LOCATION` if you want work-aware travel origins
 - `GOOGLE_MAPS_API_KEY`
 - `CRON_SECRET`
 

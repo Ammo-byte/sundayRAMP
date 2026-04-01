@@ -6,7 +6,9 @@ Encapsulates one full pass: fetch emails → LLM parse → calendar → notify.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 from calendar_manager import CalendarManager
 from config import Config
@@ -22,6 +24,16 @@ log = logging.getLogger(__name__)
 _gmail: GmailWatcher | None = None
 _calendar: CalendarManager | None = None
 _travel: TravelEstimator | None = None
+_CALENDAR_ORIGIN_LOOKBACK = timedelta(hours=6)
+_WEEKDAY_INDEX = {
+    "mon": 0,
+    "tue": 1,
+    "wed": 2,
+    "thu": 3,
+    "fri": 4,
+    "sat": 5,
+    "sun": 6,
+}
 
 
 def _build_gmail_thread_link(email_data: dict) -> str | None:
@@ -44,6 +56,144 @@ def _is_location_request_enabled() -> bool:
 
     parsed = urlparse(Config.location_request_base_url)
     return bool(parsed.scheme and parsed.netloc)
+
+
+def _event_start_dt(event: dict) -> datetime | None:
+    """Return the target event's start as a timezone-aware datetime."""
+    try:
+        start_dt = datetime.fromisoformat(f"{event['date']}T{event['start_time']}:00")
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    return start_dt.replace(tzinfo=ZoneInfo(Config.timezone))
+
+
+def _google_event_dt(event_item: dict, edge: str) -> datetime | None:
+    """Parse a Google Calendar start/end dateTime into local timezone."""
+    raw = ((event_item.get(edge) or {}).get("dateTime") or "").strip()
+    if not raw:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    tz = ZoneInfo(Config.timezone)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=tz)
+    return parsed.astimezone(tz)
+
+
+def _origin_from_address(
+    address: str | None,
+    lat: float | None,
+    lng: float | None,
+    source: str,
+) -> tuple[str | None, str | None, str | None]:
+    """Build a Maps origin tuple from an address and optional coordinates."""
+    clean_address = (address or "").strip()
+    if lat is not None and lng is not None and clean_address:
+        return f"{lat},{lng}", clean_address, source
+    if clean_address:
+        return clean_address, clean_address, source
+    return None, None, None
+
+
+def _is_within_work_window(start_dt: datetime) -> bool:
+    """Return true when an event start falls within the configured work schedule."""
+    if not Config.default_work_location:
+        return False
+
+    configured_days = {
+        _WEEKDAY_INDEX[day.lower()]
+        for day in Config.work_days
+        if day.lower() in _WEEKDAY_INDEX
+    }
+    if start_dt.weekday() not in configured_days:
+        return False
+
+    try:
+        work_start = datetime.strptime(Config.workday_start_time, "%H:%M").time()
+        work_end = datetime.strptime(Config.workday_end_time, "%H:%M").time()
+    except ValueError:
+        return False
+
+    event_time = start_dt.timetz().replace(tzinfo=None)
+    if work_start <= work_end:
+        return work_start <= event_time < work_end
+    return event_time >= work_start or event_time < work_end
+
+
+def _default_origin_for_event(start_dt: datetime | None) -> tuple[str | None, str | None, str | None]:
+    """Choose between configured work/home defaults for a target event."""
+    if start_dt and _is_within_work_window(start_dt):
+        work_origin = _origin_from_address(
+            Config.default_work_location,
+            Config.default_work_lat,
+            Config.default_work_lng,
+            "work",
+        )
+        if work_origin[0]:
+            return work_origin
+
+    home_origin = _origin_from_address(
+        Config.default_home_location,
+        Config.default_home_lat,
+        Config.default_home_lng,
+        "home",
+    )
+    if home_origin[0]:
+        return home_origin
+
+    return _origin_from_address(
+        Config.default_work_location,
+        Config.default_work_lat,
+        Config.default_work_lng,
+        "work",
+    )
+
+
+def _scheduled_origin_for_event(
+    calendar: CalendarManager,
+    start_dt: datetime | None,
+) -> tuple[str | None, str | None, str | None]:
+    """Infer origin from the latest scheduled calendar event before the target event."""
+    if start_dt is None:
+        return None, None, None
+
+    events = calendar.list_events_for_day(start_dt.date().isoformat())
+    best_origin: tuple[str | None, str | None, str | None] = (None, None, None)
+    best_end: datetime | None = None
+
+    for item in events:
+        location = (item.get("location") or "").strip()
+        if not location:
+            continue
+
+        candidate_end = _google_event_dt(item, "end")
+        if candidate_end is None:
+            continue
+
+        gap = start_dt - candidate_end
+        if gap.total_seconds() < 0 or gap > _CALENDAR_ORIGIN_LOOKBACK:
+            continue
+
+        if best_end is None or candidate_end > best_end:
+            best_end = candidate_end
+            best_origin = (location, location, "calendar_context")
+
+    return best_origin
+
+
+def _should_request_phone_location(start_dt: datetime | None) -> bool:
+    """Return true when current phone location is relevant to this event."""
+    if start_dt is None or not _is_location_request_enabled():
+        return False
+
+    now = datetime.now(ZoneInfo(Config.timezone))
+    delta = start_dt - now
+    return 0 <= delta.total_seconds() <= Config.current_location_lookahead_hours * 3600
 
 
 async def _request_phone_origin_for_event(
@@ -81,6 +231,44 @@ async def _request_phone_origin_for_event(
         return None, None
 
     return f"{response['lat']},{response['lng']}", response.get("address")
+
+
+async def _choose_travel_origin(
+    event: dict,
+    email_data: dict,
+    calendar: CalendarManager,
+    processing_notes: list[str],
+) -> tuple[str | None, str | None, str | None]:
+    """
+    Infer the most likely travel origin for an event.
+
+    Priority:
+      1. The latest scheduled calendar event with a location before this event
+      2. The phone's current location when the event is imminent
+      3. Configured work location during work hours
+      4. Configured home location
+    """
+    start_dt = _event_start_dt(event)
+
+    try:
+        scheduled_origin = _scheduled_origin_for_event(calendar, start_dt)
+    except Exception as exc:
+        log.warning("  → Calendar-context origin unavailable: %s", exc)
+        processing_notes.append(f"Calendar-context origin unavailable: {exc}")
+    else:
+        if scheduled_origin[0]:
+            return scheduled_origin
+
+    if _should_request_phone_location(start_dt):
+        requested_origin, requested_origin_address = await _request_phone_origin_for_event(
+            event,
+            email_data,
+            processing_notes,
+        )
+        if requested_origin:
+            return requested_origin, requested_origin_address, "phone_request"
+
+    return _default_origin_for_event(start_dt)
 
 
 def _get_singletons() -> tuple[GmailWatcher, CalendarManager, TravelEstimator]:
@@ -128,23 +316,12 @@ async def process_single_email(
             event = parsed["event"]
             if not event.get("is_online") and event.get("location"):
                 routing_destination = event["location"]
-                requested_origin, requested_origin_address = await _request_phone_origin_for_event(
+                origin_for_maps, origin_label, origin_source = await _choose_travel_origin(
                     event,
                     email_data,
+                    calendar,
                     processing_notes,
                 )
-                origin_for_maps = requested_origin
-                origin_label = requested_origin_address
-                origin_source = "phone_request" if requested_origin else None
-
-                if (
-                    _is_location_request_enabled()
-                    and requested_origin is None
-                    and Config.default_home_location
-                ):
-                    origin_for_maps = Config.default_home_location
-                    origin_label = Config.default_home_location
-                    origin_source = "config"
 
                 try:
                     resolved_location = await travel.resolve_destination(event["location"])
@@ -169,6 +346,11 @@ async def process_single_email(
                     processing_notes.append(f"Travel estimate unavailable: {exc}")
                 else:
                     log.info("  → Travel: %d min", travel_info["travel_minutes"])
+                    log.info(
+                        "  → Travel origin: %s (%s)",
+                        travel_info.get("origin", origin_label or origin_for_maps or "unknown"),
+                        travel_info.get("origin_source", origin_source or "unknown"),
+                    )
 
             calendar_result = calendar.create_smart_event(
                 event,

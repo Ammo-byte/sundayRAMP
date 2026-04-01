@@ -15,8 +15,9 @@ class _FakeGmail:
 
 
 class _FakeCalendar:
-    def __init__(self):
+    def __init__(self, day_events=None):
         self.last_event = None
+        self.day_events = day_events or []
 
     def create_smart_event(self, parsed_event, travel_info=None, source_email_id=None):
         del travel_info, source_email_id
@@ -25,6 +26,10 @@ class _FakeCalendar:
             "status": "created",
             "event": {"htmlLink": "https://calendar.google.com/event"},
         }
+
+    def list_events_for_day(self, target_date=None):
+        del target_date
+        return list(self.day_events)
 
 
 class _FakeTravel:
@@ -388,6 +393,7 @@ async def test_process_single_email_requests_phone_location_and_uses_reply(monke
     monkeypatch.setattr("pipeline.send_summary", fake_send_summary)
     monkeypatch.setattr("pipeline.send_phone_location_request", fake_send_phone_location_request)
     monkeypatch.setattr("pipeline.wait_for_location_response", fake_wait_for_location_response)
+    monkeypatch.setattr("pipeline._should_request_phone_location", lambda start_dt: True)
     monkeypatch.setattr(
         "pipeline.create_location_request",
         lambda event, source_email_id=None: {
@@ -420,3 +426,168 @@ async def test_process_single_email_requests_phone_location_and_uses_reply(monke
     assert result["calendar_status"] == "created"
     assert requested_messages == ["SUNDAY_LOCATION_REQUEST req-1"]
     assert travel.last_estimate_args["origin"] == "40.1106,-88.2272"
+
+
+@pytest.mark.anyio
+async def test_process_single_email_uses_work_origin_during_work_hours(monkeypatch):
+    async def fake_parse_email(email_data):
+        del email_data
+        return {
+            "has_event": True,
+            "needs_response": False,
+            "urgency": "low",
+            "summary": "Coffee chat this afternoon",
+            "event": {
+                "title": "Coffee with Aryan Gupta",
+                "date": "2026-04-01",
+                "start_time": "14:00",
+                "end_time": "14:30",
+                "location": "Illini Union",
+                "is_online": False,
+            },
+            "action_items": [],
+            "can_wait": True,
+        }
+
+    async def fake_send_summary(**kwargs):
+        del kwargs
+        return None
+
+    monkeypatch.setattr("pipeline.parse_email", fake_parse_email)
+    monkeypatch.setattr("pipeline.send_summary", fake_send_summary)
+    monkeypatch.setattr("pipeline._should_request_phone_location", lambda start_dt: False)
+    monkeypatch.setattr("pipeline.Config.default_home_location", "Home")
+    monkeypatch.setattr("pipeline.Config.default_home_lat", None)
+    monkeypatch.setattr("pipeline.Config.default_home_lng", None)
+    monkeypatch.setattr("pipeline.Config.default_work_location", "Office")
+    monkeypatch.setattr("pipeline.Config.default_work_lat", None)
+    monkeypatch.setattr("pipeline.Config.default_work_lng", None)
+    monkeypatch.setattr("pipeline.Config.work_days", ["wed"])
+    monkeypatch.setattr("pipeline.Config.workday_start_time", "09:00")
+    monkeypatch.setattr("pipeline.Config.workday_end_time", "17:00")
+
+    calendar = _FakeCalendar()
+    gmail = _FakeGmail()
+    travel = _FakeTravel()
+
+    result = await process_single_email(
+        {"id": "gmail-7", "thread_id": "thread-7", "body": "coffee"},
+        gmail,
+        calendar,
+        travel,
+    )
+
+    assert result["calendar_status"] == "created"
+    assert travel.last_estimate_args["origin"] == "Office"
+    assert travel.last_estimate_args["origin_label"] == "Office"
+    assert travel.last_estimate_args["origin_source"] == "work"
+
+
+@pytest.mark.anyio
+async def test_process_single_email_uses_home_origin_outside_work_hours(monkeypatch):
+    async def fake_parse_email(email_data):
+        del email_data
+        return {
+            "has_event": True,
+            "needs_response": False,
+            "urgency": "low",
+            "summary": "Dinner tonight",
+            "event": {
+                "title": "Dinner with Aryan Gupta",
+                "date": "2026-04-01",
+                "start_time": "19:00",
+                "end_time": "20:30",
+                "location": "Downtown Champaign",
+                "is_online": False,
+            },
+            "action_items": [],
+            "can_wait": True,
+        }
+
+    async def fake_send_summary(**kwargs):
+        del kwargs
+        return None
+
+    monkeypatch.setattr("pipeline.parse_email", fake_parse_email)
+    monkeypatch.setattr("pipeline.send_summary", fake_send_summary)
+    monkeypatch.setattr("pipeline._should_request_phone_location", lambda start_dt: False)
+    monkeypatch.setattr("pipeline.Config.default_home_location", "Home")
+    monkeypatch.setattr("pipeline.Config.default_home_lat", None)
+    monkeypatch.setattr("pipeline.Config.default_home_lng", None)
+    monkeypatch.setattr("pipeline.Config.default_work_location", "Office")
+    monkeypatch.setattr("pipeline.Config.default_work_lat", None)
+    monkeypatch.setattr("pipeline.Config.default_work_lng", None)
+    monkeypatch.setattr("pipeline.Config.work_days", ["wed"])
+    monkeypatch.setattr("pipeline.Config.workday_start_time", "09:00")
+    monkeypatch.setattr("pipeline.Config.workday_end_time", "17:00")
+
+    calendar = _FakeCalendar()
+    gmail = _FakeGmail()
+    travel = _FakeTravel()
+
+    result = await process_single_email(
+        {"id": "gmail-8", "thread_id": "thread-8", "body": "dinner"},
+        gmail,
+        calendar,
+        travel,
+    )
+
+    assert result["calendar_status"] == "created"
+    assert travel.last_estimate_args["origin"] == "Home"
+    assert travel.last_estimate_args["origin_source"] == "home"
+
+
+@pytest.mark.anyio
+async def test_process_single_email_uses_latest_prior_calendar_location_as_origin(monkeypatch):
+    async def fake_parse_email(email_data):
+        del email_data
+        return {
+            "has_event": True,
+            "needs_response": False,
+            "urgency": "low",
+            "summary": "Lunch meeting",
+            "event": {
+                "title": "Lunch meeting with Aryan Gupta",
+                "date": "2026-04-01",
+                "start_time": "15:00",
+                "end_time": "16:00",
+                "location": "Illini Union",
+                "is_online": False,
+            },
+            "action_items": [],
+            "can_wait": True,
+        }
+
+    async def fake_send_summary(**kwargs):
+        del kwargs
+        return None
+
+    monkeypatch.setattr("pipeline.parse_email", fake_parse_email)
+    monkeypatch.setattr("pipeline.send_summary", fake_send_summary)
+    monkeypatch.setattr("pipeline._should_request_phone_location", lambda start_dt: False)
+    monkeypatch.setattr("pipeline.Config.default_home_location", "Home")
+    monkeypatch.setattr("pipeline.Config.default_work_location", "Office")
+
+    calendar = _FakeCalendar(
+        day_events=[
+            {
+                "summary": "Classes",
+                "location": "Siebel Center",
+                "start": {"dateTime": "2026-04-01T13:00:00-05:00"},
+                "end": {"dateTime": "2026-04-01T14:30:00-05:00"},
+            }
+        ]
+    )
+    gmail = _FakeGmail()
+    travel = _FakeTravel()
+
+    result = await process_single_email(
+        {"id": "gmail-9", "thread_id": "thread-9", "body": "lunch"},
+        gmail,
+        calendar,
+        travel,
+    )
+
+    assert result["calendar_status"] == "created"
+    assert travel.last_estimate_args["origin"] == "Siebel Center"
+    assert travel.last_estimate_args["origin_source"] == "calendar_context"
