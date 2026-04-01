@@ -32,6 +32,28 @@ def test_format_summary_for_event_is_informal_without_inline_email_link(monkeypa
     assert "original email:" not in message
 
 
+def test_format_summary_separates_notes_with_blank_line(monkeypatch):
+    monkeypatch.setattr("messenger.Config.timezone", "America/Chicago")
+
+    message = format_summary(
+        parsed_email={
+            "has_event": True,
+            "summary": "Meet Aryan for dinner at the Union at 7 PM.",
+            "event": {
+                "title": "Dinner meeting with Aryan Gupta",
+                "date": "2099-04-01",
+                "start_time": "19:00",
+                "location": "Illini Union (1401 W Green St, Urbana, IL 61801)",
+                "is_online": False,
+            },
+        },
+        travel_info={"departure_time": "6:41 PM"},
+        processing_notes=["Used fallback origin instead."],
+    )
+
+    assert "\n\nnote: Used fallback origin instead." in message
+
+
 @pytest.mark.anyio
 async def test_send_summary_sends_email_link_as_follow_up_message(monkeypatch):
     sent_messages: list[str] = []

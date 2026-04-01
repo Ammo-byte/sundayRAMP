@@ -271,8 +271,10 @@ def format_summary(
         if parsed_email.get("can_wait"):
             lines.append("this can wait")
 
-    for note in notes:
-        lines.append(f"note: {note}")
+    if notes:
+        lines.append("")
+        for note in notes:
+            lines.append(f"note: {note}")
 
     return "\n".join(lines)
 
@@ -335,4 +337,3 @@ async def send_summary(
 
     if not sent_any:
         raise MessagingDeliveryError("; ".join(errors) or "No messaging channel delivered the summary.")
-
