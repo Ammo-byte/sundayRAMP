@@ -219,24 +219,40 @@ class CalendarManager:
         if parsed_event.get("description"):
             parts.append(parsed_event["description"])
 
+        detail_sentences: list[str] = []
+
+        if travel_info:
+            travel_minutes = int(travel_info.get("travel_minutes") or 0)
+            if travel_minutes > 0:
+                travel_type = CalendarManager._travel_type_phrase(Config.travel_mode)
+                origin = (travel_info.get("origin") or "").strip()
+                travel_sentence = f"{travel_minutes} min {travel_type}"
+                if origin:
+                    travel_sentence += f" from {origin}"
+                detail_sentences.append(travel_sentence)
+            if travel_info.get("departure_time"):
+                detail_sentences.append(f"Leave by: {travel_info['departure_time']}")
+
+        if parsed_event.get("organizer"):
+            detail_sentences.append(f"Organized by {parsed_event['organizer']}")
+
+        if detail_sentences:
+            parts.append(" ".join(f"{sentence}." for sentence in detail_sentences))
+
         if parsed_event.get("meeting_link"):
             parts.append(f"Meeting link: {parsed_event['meeting_link']}")
 
-        if travel_info:
-            travel_text = (travel_info.get("travel_text") or "").strip()
-            if not travel_text:
-                travel_minutes = int(travel_info.get("travel_minutes") or 0)
-                travel_text = f"{travel_minutes} min" if travel_minutes == 1 else f"{travel_minutes} mins"
-            parts.append(
-                f"Estimated travel at creation: {travel_text} from {travel_info.get('origin', '')}"
-            )
-            if travel_info.get("departure_time"):
-                parts.append(f"Leave by: {travel_info['departure_time']}")
-
-        if parsed_event.get("organizer"):
-            parts.append(f"Organized by: {parsed_event['organizer']}")
-
         return "\n".join(parts)
+
+    @staticmethod
+    def _travel_type_phrase(travel_mode: str) -> str:
+        """Return a human phrase for the configured travel type."""
+        return {
+            "driving": "drive",
+            "walking": "walk",
+            "bicycling": "bike ride",
+            "transit": "transit ride",
+        }.get(travel_mode, "trip")
 
     @staticmethod
     def _event_context(parsed_event: dict) -> str:

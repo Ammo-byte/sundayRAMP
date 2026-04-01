@@ -133,7 +133,9 @@ def test_compute_smart_reminders_keeps_day_before_for_interview(monkeypatch):
     assert {"method": "popup", "minutes": 1440} in reminders
 
 
-def test_build_description_uses_single_travel_text_snapshot():
+def test_build_description_formats_travel_sentence_for_selected_travel_type(monkeypatch):
+    monkeypatch.setattr("calendar_manager.Config.travel_mode", "driving")
+
     description = CalendarManager._build_description(
         {
             "description": "",
@@ -148,6 +150,24 @@ def test_build_description_uses_single_travel_text_snapshot():
         },
     )
 
-    assert "Estimated travel at creation: 3 mins from Campus Circle Urbana" in description
-    assert "Travel: 3 min (3 mins)" not in description
-    assert "Leave by: 9:42 PM" in description
+    assert description == "3 min drive from Campus Circle Urbana. Leave by: 9:42 PM. Organized by Aryan Gupta."
+
+
+def test_build_description_uses_walk_phrase_when_travel_type_is_walking(monkeypatch):
+    monkeypatch.setattr("calendar_manager.Config.travel_mode", "walking")
+
+    description = CalendarManager._build_description(
+        {
+            "description": "",
+            "meeting_link": None,
+            "organizer": None,
+        },
+        {
+            "travel_minutes": 18,
+            "travel_text": "18 mins",
+            "origin": "Campus Circle Urbana",
+            "departure_time": "6:27 PM",
+        },
+    )
+
+    assert description == "18 min walk from Campus Circle Urbana. Leave by: 6:27 PM."
