@@ -1,15 +1,16 @@
 """
 gmail_watcher.py — Gmail polling and authentication.
 
-Polls for unread emails on a configurable interval. Uses OAuth2 via
-the Google API Python client library. On first run it opens a browser
-for the consent screen; subsequent runs refresh the saved token.
+Polls Gmail for newly arrived inbox messages. Messages that were already
+present before the watcher started are ignored; only emails received after
+startup are eligible for processing.
 """
 from __future__ import annotations
 
 import base64
 import json
 import logging
+import time
 from html.parser import HTMLParser
 from typing import Any
 
@@ -63,11 +64,10 @@ def _save_processed_ids(processed_ids: set[str]) -> None:
 
 class GmailWatcher:
     """
-    Polls Gmail for unread messages on the configured labels.
+    Poll Gmail for messages that arrived after startup.
 
-    Any messages that are already unread when the watcher starts are
-    treated as backlog and ignored. Only emails that arrive after the
-    process starts are eligible for processing.
+    The watcher uses Gmail's `internalDate` so a message still counts as new
+    even if you open it before the next polling cycle.
     """
 
     def __init__(self) -> None:
@@ -76,79 +76,79 @@ class GmailWatcher:
         self.service = get_google_service("gmail", "v1")
         self._seen_ids: set[str] = set()
         self._processed_ids: set[str] = _load_processed_ids()
-        self._startup_unread_ids = self._list_unread_message_ids()
-        if self._startup_unread_ids:
-            log.info(
-                "Ignoring %d unread email(s) that were already in the inbox at startup.",
-                len(self._startup_unread_ids),
+        self._startup_cutoff_ms = int(time.time() * 1000)
+        log.info(
+            "Watcher baseline set at %d. Only emails received after startup will be processed.",
+            self._startup_cutoff_ms,
+        )
+
+    def _list_message_ids_page(self, page_token: str | None = None, max_results: int = 25) -> dict:
+        """Return one page of inbox message IDs."""
+        return (
+            self.service.users()
+            .messages()
+            .list(
+                userId="me",
+                labelIds=Config.gmail_labels,
+                maxResults=max_results,
+                pageToken=page_token,
             )
-
-    def _list_unread_message_ids(self, max_results: int | None = None) -> list[str]:
-        """Return unread Gmail message IDs, newest first."""
-        page_token: str | None = None
-        unread_ids: list[str] = []
-
-        while True:
-            request = (
-                self.service.users()
-                .messages()
-                .list(
-                    userId="me",
-                    labelIds=Config.gmail_labels,
-                    q="is:unread",
-                    maxResults=max_results or 100,
-                    pageToken=page_token,
-                )
-            )
-            results = request.execute()
-            unread_ids.extend(
-                message["id"]
-                for message in results.get("messages", [])
-                if "id" in message
-            )
-
-            if max_results is not None and len(unread_ids) >= max_results:
-                return unread_ids[:max_results]
-
-            page_token = results.get("nextPageToken")
-            if not page_token:
-                return unread_ids
+            .execute()
+        )
 
     def get_new_emails(self, max_results: int = 10) -> list[dict]:
         """
-        Fetch unread, unseen emails from the configured Gmail labels.
+        Fetch inbox emails that arrived after startup and were not processed yet.
 
         Raises:
             RuntimeError: If Gmail cannot be queried.
         """
-        try:
-            message_ids = self._list_unread_message_ids(max_results=max_results)
-        except Exception as exc:
-            raise RuntimeError("Gmail list failed.") from exc
-
+        page_token: str | None = None
         new_emails: list[dict] = []
 
-        for msg_id in message_ids:
-            if (
-                msg_id in self._startup_unread_ids
-                or msg_id in self._seen_ids
-                or msg_id in self._processed_ids
-            ):
-                continue
+        try:
+            while len(new_emails) < max_results:
+                results = self._list_message_ids_page(page_token=page_token, max_results=25)
+                messages = results.get("messages", [])
+                if not messages:
+                    break
 
-            self._seen_ids.add(msg_id)
-            msg = (
-                self.service.users()
-                .messages()
-                .get(userId="me", id=msg_id, format="full")
-                .execute()
-            )
-            new_emails.append(self._parse_message(msg))
+                stop_paging = False
+                for msg_meta in messages:
+                    msg_id = msg_meta["id"]
+                    if msg_id in self._seen_ids or msg_id in self._processed_ids:
+                        continue
+
+                    msg = (
+                        self.service.users()
+                        .messages()
+                        .get(userId="me", id=msg_id, format="full")
+                        .execute()
+                    )
+
+                    internal_date_ms = int(msg.get("internalDate", "0"))
+                    if internal_date_ms <= self._startup_cutoff_ms:
+                        stop_paging = True
+                        continue
+
+                    self._seen_ids.add(msg_id)
+                    new_emails.append(self._parse_message(msg))
+                    if len(new_emails) >= max_results:
+                        break
+
+                if stop_paging or len(new_emails) >= max_results:
+                    break
+
+                page_token = results.get("nextPageToken")
+                if not page_token:
+                    break
+        except Exception as exc:
+            raise RuntimeError("Gmail list failed.") from exc
 
         return new_emails
 
     def mark_as_processed(self, message_id: str) -> None:
-        """Persist a message as processed and remove the UNREAD label."""
+        """Persist a message as processed and remove the UNREAD label if present."""
         try:
             self.service.users().messages().modify(
                 userId="me",
@@ -156,7 +156,7 @@ class GmailWatcher:
                 body={"removeLabelIds": ["UNREAD"]},
             ).execute()
         except Exception as exc:
-            raise RuntimeError(f"Could not mark message {message_id} as read.") from exc
+            raise RuntimeError(f"Could not mark message {message_id} as processed.") from exc
 
         self._processed_ids.add(message_id)
         _save_processed_ids(self._processed_ids)

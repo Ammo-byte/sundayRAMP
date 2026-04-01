@@ -43,9 +43,10 @@ class _FakeService:
         return self._users
 
 
-def _gmail_payload(message_id: str, subject: str) -> dict:
+def _gmail_payload(message_id: str, subject: str, internal_date: int) -> dict:
     return {
         "id": message_id,
+        "internalDate": str(internal_date),
         "payload": {
             "headers": [
                 {"name": "From", "value": "sender@example.com"},
@@ -57,18 +58,19 @@ def _gmail_payload(message_id: str, subject: str) -> dict:
     }
 
 
-def test_get_new_emails_ignores_startup_backlog():
+def test_get_new_emails_only_returns_messages_received_after_startup():
     watcher = object.__new__(GmailWatcher)
     watcher._seen_ids = set()
     watcher._processed_ids = set()
-    watcher._startup_unread_ids = {"old-1", "old-2"}
+    watcher._startup_cutoff_ms = 1000
 
     messages = _FakeMessages(
         list_payloads=[
-            {"messages": [{"id": "old-1"}, {"id": "new-1"}]},
+            {"messages": [{"id": "new-1"}, {"id": "old-1"}]},
         ],
         get_payloads={
-            "new-1": _gmail_payload("new-1", "Fresh email"),
+            "new-1": _gmail_payload("new-1", "Fresh email", 2000),
+            "old-1": _gmail_payload("old-1", "Old email", 900),
         },
     )
     watcher.service = _FakeService(messages)
@@ -76,4 +78,25 @@ def test_get_new_emails_ignores_startup_backlog():
     emails = watcher.get_new_emails(max_results=10)
 
     assert [email["id"] for email in emails] == ["new-1"]
-    assert messages.get_calls == ["new-1"]
+    assert messages.get_calls == ["new-1", "old-1"]
+
+
+def test_get_new_emails_can_pick_up_a_new_message_even_if_it_is_not_unread():
+    watcher = object.__new__(GmailWatcher)
+    watcher._seen_ids = set()
+    watcher._processed_ids = set()
+    watcher._startup_cutoff_ms = 1000
+
+    messages = _FakeMessages(
+        list_payloads=[
+            {"messages": [{"id": "new-opened"}]},
+        ],
+        get_payloads={
+            "new-opened": _gmail_payload("new-opened", "Opened email", 2000),
+        },
+    )
+    watcher.service = _FakeService(messages)
+
+    emails = watcher.get_new_emails(max_results=10)
+
+    assert [email["id"] for email in emails] == ["new-opened"]
