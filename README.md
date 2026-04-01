@@ -378,7 +378,9 @@ If you run the FastAPI server, you get:
 - `GET /api/location`
 - `POST /api/location`
 - `GET /api/location/request`
+- `GET /api/location/request/latest`
 - `POST /api/location/respond`
+- `POST /api/location/respond/latest`
 - `POST /api/plan-day`
 
 ### On-demand iPhone location
@@ -410,12 +412,20 @@ LOCATION_REQUEST_BASE_URL=http://<your-mac-tailscale-host-or-ip>:8000
 
 Then build the iPhone Shortcut described in [shortcuts/Sunday Location Poller.md](/Users/aryan/Desktop/sunday/shortcuts/Sunday Location Poller.md).
 
-The flow is:
+The simplest flow is:
 1. backend creates a pending request
-2. iPhone Shortcut calls `GET /api/location/request`
-3. if a request exists, the Shortcut gets current location
-4. the Shortcut posts it to `POST /api/location/respond`
+2. iPhone Shortcut calls `GET /api/location/request/latest`
+3. if `pending=true`, the Shortcut gets current location
+4. the Shortcut posts it to `POST /api/location/respond/latest`
 5. the worker uses that fresh GPS fix if it arrives in time
+
+The older detailed endpoints still exist:
+- `GET /api/location/request`
+- `POST /api/location/respond`
+
+But the `latest` endpoints are much easier to wire up in Apple Shortcuts because
+they do not require parsing and carrying `request_id`, `token`, and `callback_url`
+through multiple bubbles.
 
 If the phone replies in time, travel estimates use that fresh GPS fix.
 If it does not, the app falls back to intelligent origin inference:

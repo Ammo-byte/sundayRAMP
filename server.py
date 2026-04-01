@@ -19,7 +19,11 @@ from calendar_manager import CalendarManager
 from config import Config
 from day_planner import format_schedule, plan_day
 from errors import ConfigurationError
-from location_requests import get_pending_location_request, record_location_response
+from location_requests import (
+    get_pending_location_request,
+    record_latest_location_response,
+    record_location_response,
+)
 from location_state import get_current_location, update_location
 from pipeline import run_pipeline
 
@@ -165,6 +169,46 @@ async def get_pending_location():
         raise HTTPException(status_code=404, detail="No pending location request.")
 
     return {"status": "pending", "request": pending}
+
+
+@app.get("/api/location/request/latest")
+async def get_pending_location_latest():
+    """Return pending-request status in a shortcut-friendly fixed shape."""
+    try:
+        pending = get_pending_location_request()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if pending is None:
+        return {"pending": False}
+
+    return {
+        "pending": True,
+        "event_title": pending.get("event_title", ""),
+        "event_date": pending.get("event_date", ""),
+        "event_start_time": pending.get("event_start_time", ""),
+        "event_location": pending.get("event_location", ""),
+    }
+
+
+@app.post("/api/location/respond/latest")
+async def respond_latest_location_request(body: LocationUpdate):
+    """Receive a one-time location reply for the oldest pending request."""
+    try:
+        result = record_latest_location_response(
+            lat=body.lat,
+            lng=body.lng,
+            address=body.address,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "status": "ok",
+        "location": result["location"],
+        "request_id": result["request"]["request_id"],
+    }
 
 
 @app.get("/api/location")

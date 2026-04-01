@@ -157,6 +157,35 @@ def record_location_response(
     raise LookupError("Location request not found.")
 
 
+def record_latest_location_response(
+    lat: float,
+    lng: float,
+    address: str | None = None,
+) -> dict:
+    """Record a phone location response for the oldest pending request."""
+    requests = _prune_requests(_load_requests())
+    now = _utc_now()
+
+    for request in requests:
+        expires_at = _parse_iso8601(request.get("expires_at"))
+        if expires_at and expires_at < now and request.get("status") == "pending":
+            request["status"] = "expired"
+            continue
+
+        if request.get("status") != "pending":
+            continue
+
+        location = update_location(lat, lng, address)
+        request["status"] = "fulfilled"
+        request["responded_at"] = now.isoformat()
+        request["location"] = location
+        _save_requests(requests)
+        return {"request": request, "location": location}
+
+    _save_requests(requests)
+    raise LookupError("No pending location request.")
+
+
 def get_location_response(request_id: str) -> dict | None:
     """Return a fulfilled location response, if present."""
     for request in _load_requests():
