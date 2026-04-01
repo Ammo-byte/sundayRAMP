@@ -97,6 +97,7 @@ class Config:
     telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
     imessage_enabled: bool = os.getenv("IMESSAGE_ENABLED", "false").lower() == "true"
     imessage_recipient: str = os.getenv("IMESSAGE_RECIPIENT", "")
+    text_email_links: bool = os.getenv("TEXT_EMAIL_LINKS", "false").lower() == "true"
 
     # ── Preferences ──
     default_location: str = os.getenv("MY_DEFAULT_LOCATION", "")

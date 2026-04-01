@@ -233,6 +233,7 @@ Prerequisites for iMessage to work:
 Set:
 - `IMESSAGE_ENABLED=true`
 - `IMESSAGE_RECIPIENT=<phone number or email from above>`
+- `TEXT_EMAIL_LINKS=true` if you want the original Gmail thread link sent as a follow-up text
 
 If iMessage is enabled but not correctly configured, delivery fails visibly.
 

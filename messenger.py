@@ -224,7 +224,7 @@ async def send_summary(
 
     async def _send_main_and_link(sender) -> bool:
         delivered = await sender.send(message)
-        if delivered and source_email_link:
+        if delivered and source_email_link and Config.text_email_links:
             try:
                 await sender.send(source_email_link)
             except MessagingDeliveryError as exc:
