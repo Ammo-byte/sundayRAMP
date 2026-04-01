@@ -165,11 +165,45 @@ The pipeline now has a real delivery channel.
 
 iMessage only works on macOS and uses AppleScript.
 
+What `IMESSAGE_RECIPIENT` should be:
+- the exact phone number or email address you would type into the "To:" field in the Messages app
+- usually one of these:
+  - your own iPhone number, like `+12175551234`
+  - your Apple ID/iMessage email, like `name@icloud.com`
+  - another person's iMessage-enabled phone number or Apple ID email
+
+Examples:
+- `IMESSAGE_RECIPIENT=+12175551234`
+- `IMESSAGE_RECIPIENT=name@icloud.com`
+
+If you want the bot to message you, use your own iMessage-reachable address.
+
+How to find the correct value:
+1. Open the `Messages` app on your Mac.
+2. Start a new message.
+3. In the `To:` field, type the address you normally use to message yourself or the target person.
+4. Use that exact value in `IMESSAGE_RECIPIENT`.
+
+If you are not sure whether to use your phone number or email:
+1. On your iPhone, open `Settings -> Apps -> Messages -> Send & Receive`.
+2. Look under `You Can Receive iMessages To And Reply From`.
+3. Use one of those checked phone numbers or email addresses.
+
+Prerequisites for iMessage to work:
+- you must be on macOS
+- you must be signed into the `Messages` app
+- iMessage must already work manually from that Mac
+
 Set:
 - `IMESSAGE_ENABLED=true`
-- `IMESSAGE_RECIPIENT=...`
+- `IMESSAGE_RECIPIENT=<phone number or email from above>`
 
 If iMessage is enabled but not correctly configured, delivery fails visibly.
+
+Quick test:
+1. Open `Messages` on your Mac and manually send a message to the same phone number or email.
+2. If that works, use the same value in `IMESSAGE_RECIPIENT`.
+3. If manual sending does not work, the app will not work either.
 
 ## First Run
 
