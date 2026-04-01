@@ -92,9 +92,9 @@ class TravelEstimator:
         return f"{southwest}|{northeast}"
 
     @classmethod
-    def _local_search_circle(cls) -> tuple[str | None, int | None]:
-        """Return a local search center/radius for place searches."""
-        coords = cls._local_search_coords()
+    def _local_search_circle(cls, origin_bias: str | None = None) -> tuple[str | None, int | None]:
+        """Return a search center/radius biased to the likely origin when available."""
+        coords = cls._search_reference_points(origin_bias)
         if not coords:
             return None, None
 
@@ -110,6 +110,29 @@ class TravelEstimator:
             (Config.default_work_lat, Config.default_work_lng),
         ]
         return [(lat, lng) for lat, lng in points if lat is not None and lng is not None]
+
+    @staticmethod
+    def _parse_lat_lng(value: str | None) -> tuple[float, float] | None:
+        """Parse a 'lat,lng' string into floats when possible."""
+        if not value:
+            return None
+
+        parts = [part.strip() for part in value.split(",")]
+        if len(parts) != 2:
+            return None
+
+        try:
+            return float(parts[0]), float(parts[1])
+        except ValueError:
+            return None
+
+    @classmethod
+    def _search_reference_points(cls, origin_bias: str | None = None) -> list[tuple[float, float]]:
+        """Prefer the event origin coordinates when ranking ambiguous destinations."""
+        parsed_bias = cls._parse_lat_lng(origin_bias)
+        if parsed_bias is not None:
+            return [parsed_bias]
+        return cls._local_search_coords()
 
     @staticmethod
     def _looks_like_bare_place_name(destination: str) -> bool:
@@ -197,8 +220,12 @@ class TravelEstimator:
         return 2 * earth_radius_m * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     @classmethod
-    def _candidate_distance_meters(cls, candidate: dict) -> float | None:
-        """Return the candidate's distance to the configured local centers."""
+    def _candidate_distance_meters(
+        cls,
+        candidate: dict,
+        reference_points: list[tuple[float, float]],
+    ) -> float | None:
+        """Return the candidate's distance to the active search reference points."""
         location = ((candidate.get("geometry") or {}).get("location") or {})
         lat = location.get("lat")
         lng = location.get("lng")
@@ -207,7 +234,7 @@ class TravelEstimator:
 
         distances = [
             cls._haversine_distance_meters(lat, lng, center_lat, center_lng)
-            for center_lat, center_lng in cls._local_search_coords()
+            for center_lat, center_lng in reference_points
         ]
         return min(distances) if distances else None
 
@@ -218,6 +245,7 @@ class TravelEstimator:
         query: str,
         candidate: dict,
         context_text: str | None,
+        reference_points: list[tuple[float, float]],
     ) -> float:
         """Score a Places candidate so we prefer the best local exact match."""
         candidate_name = cls._clean_place_name(candidate.get("name", "") or "")
@@ -255,9 +283,13 @@ class TravelEstimator:
         if candidate.get("business_status") == "OPERATIONAL":
             score += 5
 
-        distance_meters = cls._candidate_distance_meters(candidate)
+        distance_meters = cls._candidate_distance_meters(candidate, reference_points)
         if distance_meters is not None:
-            score += max(0.0, 18 - min(distance_meters, 36_000) / 2_000)
+            score += max(0.0, 32 - min(distance_meters, 160_000) / 5_000)
+            if distance_meters > cls._LOCAL_SEARCH_RADIUS_METERS * 2:
+                score -= 40
+        elif reference_points:
+            score -= 10
 
         return score
 
@@ -267,6 +299,7 @@ class TravelEstimator:
         destination: str,
         candidates: list[tuple[str, dict]],
         context_text: str | None,
+        reference_points: list[tuple[float, float]],
     ) -> dict | None:
         """Choose the strongest local match across multiple Places queries."""
         best_match: dict | None = None
@@ -274,7 +307,13 @@ class TravelEstimator:
         seen_scores: dict[str, float] = {}
 
         for query, result in candidates:
-            score = cls._score_place_candidate(destination, query, result, context_text)
+            score = cls._score_place_candidate(
+                destination,
+                query,
+                result,
+                context_text,
+                reference_points,
+            )
             key = (
                 result.get("place_id")
                 or f"{cls._clean_place_name(result.get('name', '') or '')}|"
@@ -382,7 +421,12 @@ class TravelEstimator:
         resp.raise_for_status()
         return resp.json()
 
-    async def resolve_destination(self, destination: str, context_text: str | None = None) -> dict:
+    async def resolve_destination(
+        self,
+        destination: str,
+        context_text: str | None = None,
+        origin_bias: str | None = None,
+    ) -> dict:
         """
         Resolve a human place name to exact routing and display/calendar strings.
 
@@ -402,7 +446,8 @@ class TravelEstimator:
             )
 
         bounds = self._local_search_bounds()
-        search_location, search_radius = self._local_search_circle()
+        reference_points = self._search_reference_points(origin_bias)
+        search_location, search_radius = self._local_search_circle(origin_bias)
         queries = self._destination_queries(destination, context_text)
 
         try:
@@ -436,6 +481,7 @@ class TravelEstimator:
                         destination,
                         place_candidates,
                         context_text,
+                        reference_points,
                     )
 
                 if place_match:

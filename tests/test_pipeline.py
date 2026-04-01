@@ -44,9 +44,14 @@ class _FakeCalendar:
 class _FakeTravel:
     def __init__(self):
         self.last_estimate_args = None
+        self.last_resolve_args = None
 
-    async def resolve_destination(self, destination, context_text=None):
-        del context_text
+    async def resolve_destination(self, destination, context_text=None, origin_bias=None):
+        self.last_resolve_args = {
+            "destination": destination,
+            "context_text": context_text,
+            "origin_bias": origin_bias,
+        }
         if destination == "Illini Union":
             return {
                 "canonical_name": None,
@@ -82,8 +87,8 @@ class _FakeTravel:
 
 
 class _ResolveDeniedTravel(_FakeTravel):
-    async def resolve_destination(self, destination, context_text=None):
-        del destination, context_text
+    async def resolve_destination(self, destination, context_text=None, origin_bias=None):
+        del destination, context_text, origin_bias
         raise TravelEstimationError("Google Maps could not resolve destination 'Illini Union': REQUEST_DENIED.")
 
 
@@ -416,6 +421,7 @@ async def test_process_single_email_uses_work_origin_during_work_hours(monkeypat
     assert travel.last_estimate_args["origin"] == "Office"
     assert travel.last_estimate_args["origin_label"] == "Office"
     assert travel.last_estimate_args["origin_source"] == "work"
+    assert travel.last_resolve_args["origin_bias"] == "Office"
 
 
 @pytest.mark.anyio
@@ -548,8 +554,8 @@ async def test_process_single_email_replaces_typoed_venue_name_in_title(monkeypa
         }
 
     class _CanonicalizingTravel(_FakeTravel):
-        async def resolve_destination(self, destination, context_text=None):
-            del destination, context_text
+        async def resolve_destination(self, destination, context_text=None, origin_bias=None):
+            del destination, context_text, origin_bias
             return {
                 "canonical_name": "Oozu Ramen",
                 "formatted_address": "601 S 6th St #102, Champaign, IL 61820",

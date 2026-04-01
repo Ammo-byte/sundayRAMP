@@ -199,10 +199,10 @@ async def test_travel_estimator_ranks_multiple_local_place_candidates(monkeypatc
                 "status": "OK",
                 "results": [
                     {
-                        "place_id": "wrong-chain",
-                        "name": "Chili's Test Kitchen",
-                        "formatted_address": "1 Airport Way, Champaign, IL 61822, USA",
-                        "geometry": {"location": {"lat": 40.0400, "lng": -88.2800}},
+                        "place_id": "far-chain",
+                        "name": "Chili's Grill & Bar",
+                        "formatted_address": "2450 Veterans Memorial Pkwy, St. Charles, MO 63303, USA",
+                        "geometry": {"location": {"lat": 38.7850, "lng": -90.5650}},
                         "types": ["restaurant", "food"],
                     },
                     {
@@ -230,7 +230,11 @@ async def test_travel_estimator_ranks_multiple_local_place_candidates(monkeypatc
     )
 
     estimator = TravelEstimator()
-    resolved = await estimator.resolve_destination("Chili's", context_text="Dinner at Chili's with Aryan")
+    resolved = await estimator.resolve_destination(
+        "Chili's",
+        context_text="Dinner at Chili's with Aryan",
+        origin_bias="40.1165658,-88.2219593",
+    )
 
     assert resolved["canonical_name"] == "Chili's Grill & Bar"
     assert resolved["formatted_address"] == "702 W Town Center Blvd, Champaign, IL 61822"
