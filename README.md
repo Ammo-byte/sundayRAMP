@@ -310,13 +310,68 @@ If you run the FastAPI server, you get:
 - `POST /api/process`
 - `GET /api/location`
 - `POST /api/location`
+- `POST /api/location/respond`
 - `POST /api/plan-day`
 
-### Live location updates
+### On-demand iPhone location
 
-You can send location from an iPhone Shortcut to `POST /api/location`.
+Instead of streaming location constantly, the app can request your phone's
+current location only when it needs to calculate travel for an in-person event.
 
-This improves travel estimates by using your real current location instead of `MY_DEFAULT_LOCATION`.
+Set these in `config.env`:
+- `REQUEST_PHONE_LOCATION=true`
+- `LOCATION_REQUEST_BASE_URL=http://<your-mac-lan-ip>:8000`
+- `LOCATION_REQUEST_TIMEOUT_SECONDS=20`
+
+Then run the local worker as usual:
+
+```bash
+uv run python main.py
+```
+
+When `REQUEST_PHONE_LOCATION=true`, `main.py` also starts the callback server
+that receives your phone's reply.
+
+Create an iPhone personal automation in Shortcuts:
+1. Trigger: `Message`
+2. Sender: your own iMessage contact or the Mac/iMessage sender you use for the app
+3. Condition: message contains `SUNDAY_LOCATION_REQUEST`
+4. Action: run a shortcut like `Sunday Send Location`
+
+Inside the `Sunday Send Location` shortcut:
+1. Read `Shortcut Input` as text
+2. Extract these three lines from the message:
+   - `request_id=...`
+   - `token=...`
+   - `callback_url=...`
+3. `Get Current Location`
+4. `Get Details of Location` for:
+   - latitude
+   - longitude
+   - name or street address
+5. `Get Contents of URL`
+   - URL: the extracted `callback_url`
+   - Method: `POST`
+   - Request Body: `JSON`
+
+JSON body:
+
+```json
+{
+  "request_id": "extracted request_id",
+  "token": "extracted token",
+  "lat": 40.1106,
+  "lng": -88.2272,
+  "address": "Illini Union"
+}
+```
+
+If the phone replies in time, travel estimates use that fresh GPS fix.
+If it does not, the app falls back to `MY_DEFAULT_LOCATION`.
+
+### Manual live location updates
+
+If you still want to push location manually, you can send it directly to `POST /api/location`.
 
 ## Optional Vercel Deployment
 

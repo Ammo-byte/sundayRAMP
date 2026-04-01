@@ -19,6 +19,7 @@ from calendar_manager import CalendarManager
 from config import Config
 from day_planner import format_schedule, plan_day
 from errors import ConfigurationError
+from location_requests import record_location_response
 from location_state import get_current_location, update_location
 from pipeline import run_pipeline
 
@@ -57,6 +58,14 @@ class ProcessResponse(BaseModel):
 
 
 class LocationUpdate(BaseModel):
+    lat: float
+    lng: float
+    address: str | None = None
+
+
+class LocationRequestResponse(BaseModel):
+    request_id: str
+    token: str
     lat: float
     lng: float
     address: str | None = None
@@ -122,6 +131,26 @@ async def post_location(body: LocationUpdate):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"status": "ok", "location": state}
+
+
+@app.post("/api/location/respond")
+async def respond_location_request(body: LocationRequestResponse):
+    """Receive a one-time location reply from the iPhone shortcut."""
+    try:
+        result = record_location_response(
+            request_id=body.request_id,
+            token=body.token,
+            lat=body.lat,
+            lng=body.lng,
+            address=body.address,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"status": "ok", "location": result["location"], "request_id": body.request_id}
 
 
 @app.get("/api/location")

@@ -98,6 +98,9 @@ class Config:
     imessage_enabled: bool = os.getenv("IMESSAGE_ENABLED", "false").lower() == "true"
     imessage_recipient: str = os.getenv("IMESSAGE_RECIPIENT", "")
     text_email_links: bool = os.getenv("TEXT_EMAIL_LINKS", "false").lower() == "true"
+    request_phone_location: bool = os.getenv("REQUEST_PHONE_LOCATION", "false").lower() == "true"
+    location_request_base_url: str = os.getenv("LOCATION_REQUEST_BASE_URL", "").rstrip("/")
+    location_request_timeout_seconds: int = int(os.getenv("LOCATION_REQUEST_TIMEOUT_SECONDS", "20"))
 
     # ── Preferences ──
     default_location: str = os.getenv("MY_DEFAULT_LOCATION", "")
@@ -185,6 +188,8 @@ class Config:
             errors.append("LLM_RETRY_BASE_SECONDS must be greater than 0.")
         if cls.llm_requests_per_minute is not None and cls.llm_requests_per_minute < 1:
             errors.append("LLM_REQUESTS_PER_MINUTE must be at least 1 when set.")
+        if cls.location_request_timeout_seconds < 1:
+            errors.append("LOCATION_REQUEST_TIMEOUT_SECONDS must be at least 1.")
 
         if cls.telegram_token and not cls.telegram_chat_id:
             errors.append("TELEGRAM_CHAT_ID is required when TELEGRAM_BOT_TOKEN is set.")
@@ -197,6 +202,11 @@ class Config:
             warnings.append(
                 "No messaging output configured. "
                 "Summaries will fail until Telegram or iMessage is configured."
+            )
+        if cls.request_phone_location and not cls.location_request_base_url:
+            warnings.append(
+                "REQUEST_PHONE_LOCATION is enabled but LOCATION_REQUEST_BASE_URL is not set. "
+                "The app will fall back to configured/default location until a callback URL is configured."
             )
 
         if not cls.google_maps_key:

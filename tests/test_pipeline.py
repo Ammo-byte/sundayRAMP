@@ -28,6 +28,9 @@ class _FakeCalendar:
 
 
 class _FakeTravel:
+    def __init__(self):
+        self.last_estimate_args = None
+
     async def resolve_destination(self, destination):
         if destination == "Illini Union":
             return {
@@ -41,8 +44,21 @@ class _FakeTravel:
             "routing_destination": destination,
         }
 
-    async def estimate(self, destination, departure_time=None, origin=None):
-        del destination, departure_time, origin
+    async def estimate(
+        self,
+        destination,
+        departure_time=None,
+        origin=None,
+        origin_label=None,
+        origin_source=None,
+    ):
+        self.last_estimate_args = {
+            "destination": destination,
+            "departure_time": departure_time,
+            "origin": origin,
+            "origin_label": origin_label,
+            "origin_source": origin_source,
+        }
         return {"travel_minutes": 25, "departure_time": "1:20 PM"}
 
 
@@ -53,8 +69,15 @@ class _ResolveDeniedTravel(_FakeTravel):
 
 
 class _EstimateDeniedTravel(_FakeTravel):
-    async def estimate(self, destination, departure_time=None, origin=None):
-        del destination, departure_time, origin
+    async def estimate(
+        self,
+        destination,
+        departure_time=None,
+        origin=None,
+        origin_label=None,
+        origin_source=None,
+    ):
+        del destination, departure_time, origin, origin_label, origin_source
         raise TravelEstimationError(
             "Google Maps could not estimate travel for destination 'Illini Union': REQUEST_DENIED."
         )
@@ -268,3 +291,80 @@ async def test_process_single_email_still_creates_event_when_travel_estimate_fai
 
     assert result["calendar_status"] == "created"
     assert any("Travel estimate unavailable" in note for note in result["processing_notes"])
+
+
+@pytest.mark.anyio
+async def test_process_single_email_requests_phone_location_and_uses_reply(monkeypatch):
+    requested_messages: list[str] = []
+
+    async def fake_parse_email(email_data):
+        del email_data
+        return {
+            "has_event": True,
+            "needs_response": False,
+            "urgency": "low",
+            "summary": "Lunch today",
+            "event": {
+                "title": "Lunch with Aryan Gupta",
+                "date": "2026-04-01",
+                "start_time": "15:00",
+                "end_time": "16:00",
+                "location": "Illini Union",
+                "is_online": False,
+            },
+            "action_items": [],
+            "can_wait": True,
+        }
+
+    async def fake_send_summary(**kwargs):
+        del kwargs
+        return None
+
+    async def fake_send_phone_location_request(message):
+        requested_messages.append(message)
+        return None
+
+    async def fake_wait_for_location_response(request_id, timeout_seconds):
+        del request_id, timeout_seconds
+        return {
+            "lat": 40.1106,
+            "lng": -88.2272,
+            "address": "Illini Union",
+        }
+
+    monkeypatch.setattr("pipeline.parse_email", fake_parse_email)
+    monkeypatch.setattr("pipeline.send_summary", fake_send_summary)
+    monkeypatch.setattr("pipeline.send_phone_location_request", fake_send_phone_location_request)
+    monkeypatch.setattr("pipeline.wait_for_location_response", fake_wait_for_location_response)
+    monkeypatch.setattr(
+        "pipeline.create_location_request",
+        lambda event, source_email_id=None: {
+            "request_id": "req-1",
+            "token": "token-1",
+            "event_title": event["title"],
+            "event_location": event["location"],
+            "event_start_time": event["start_time"],
+            "callback_url": "http://192.168.1.10:8000/api/location/respond",
+        },
+    )
+    monkeypatch.setattr(
+        "pipeline.format_location_request_message",
+        lambda request: f"SUNDAY_LOCATION_REQUEST {request['request_id']}",
+    )
+    monkeypatch.setattr("pipeline.Config.request_phone_location", True)
+    monkeypatch.setattr("pipeline.Config.location_request_base_url", "http://192.168.1.10:8000")
+
+    calendar = _FakeCalendar()
+    gmail = _FakeGmail()
+    travel = _FakeTravel()
+
+    result = await process_single_email(
+        {"id": "gmail-6", "thread_id": "thread-6", "body": "lunch"},
+        gmail,
+        calendar,
+        travel,
+    )
+
+    assert result["calendar_status"] == "created"
+    assert requested_messages == ["SUNDAY_LOCATION_REQUEST req-1"]
+    assert travel.last_estimate_args["origin"] == "40.1106,-88.2272"

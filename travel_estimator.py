@@ -110,6 +110,8 @@ class TravelEstimator:
         destination: str,
         departure_time: str | None = None,
         origin: str | None = None,
+        origin_label: str | None = None,
+        origin_source: str | None = None,
     ) -> dict:
         """
         Estimate travel time from origin to destination.
@@ -123,14 +125,22 @@ class TravelEstimator:
                 "GOOGLE_MAPS_API_KEY is required for travel-aware reminders."
             )
 
-        _origin = origin or get_origin_string()
+        if origin:
+            _origin = origin
+            loc_info = {
+                "address": origin_label or origin,
+                "source": origin_source or "explicit",
+            }
+        else:
+            _origin = get_origin_string()
+            loc_info = get_current_location()
+
         if not _origin:
             raise TravelEstimationError(
                 "No origin is available for travel estimation. Configure MY_DEFAULT_LOCATION "
                 "or send a live location update."
             )
 
-        loc_info = get_current_location()
         log.debug("Travel origin: %s (source: %s)", _origin, loc_info["source"])
 
         params: dict = {
