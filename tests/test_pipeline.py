@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from errors import MessagingDeliveryError
+from errors import MessagingDeliveryError, TravelEstimationError
 from pipeline import process_single_email
 
 
@@ -44,6 +44,20 @@ class _FakeTravel:
     async def estimate(self, destination, departure_time=None, origin=None):
         del destination, departure_time, origin
         return {"travel_minutes": 25, "departure_time": "1:20 PM"}
+
+
+class _ResolveDeniedTravel(_FakeTravel):
+    async def resolve_destination(self, destination):
+        del destination
+        raise TravelEstimationError("Google Maps could not resolve destination 'Illini Union': REQUEST_DENIED.")
+
+
+class _EstimateDeniedTravel(_FakeTravel):
+    async def estimate(self, destination, departure_time=None, origin=None):
+        del destination, departure_time, origin
+        raise TravelEstimationError(
+            "Google Maps could not estimate travel for destination 'Illini Union': REQUEST_DENIED."
+        )
 
 
 @pytest.mark.anyio
@@ -169,3 +183,88 @@ async def test_process_single_email_enriches_missing_title_and_end_time(monkeypa
     assert calendar.last_event["title"] == "Lunch with Aryan Gupta"
     assert calendar.last_event["end_time"] == "16:00"
     assert calendar.last_event["location"] == "Illini Union (1401 W Green St, Urbana, IL 61801)"
+
+
+@pytest.mark.anyio
+async def test_process_single_email_still_creates_event_when_exact_address_lookup_fails(monkeypatch):
+    async def fake_parse_email(email_data):
+        del email_data
+        return {
+            "has_event": True,
+            "needs_response": False,
+            "urgency": "low",
+            "summary": "Lunch today",
+            "event": {
+                "title": "Lunch with Aryan Gupta",
+                "date": "2026-04-01",
+                "start_time": "15:00",
+                "end_time": "16:00",
+                "location": "Illini Union",
+                "is_online": False,
+            },
+            "action_items": [],
+            "can_wait": True,
+        }
+
+    async def fake_send_summary(**kwargs):
+        del kwargs
+        return None
+
+    monkeypatch.setattr("pipeline.parse_email", fake_parse_email)
+    monkeypatch.setattr("pipeline.send_summary", fake_send_summary)
+
+    calendar = _FakeCalendar()
+    gmail = _FakeGmail()
+
+    result = await process_single_email(
+        {"id": "gmail-4", "thread_id": "thread-4", "body": "lunch"},
+        gmail,
+        calendar,
+        _ResolveDeniedTravel(),
+    )
+
+    assert result["calendar_status"] == "created"
+    assert calendar.last_event["location"] == "Illini Union"
+    assert any("Exact address lookup unavailable" in note for note in result["processing_notes"])
+
+
+@pytest.mark.anyio
+async def test_process_single_email_still_creates_event_when_travel_estimate_fails(monkeypatch):
+    async def fake_parse_email(email_data):
+        del email_data
+        return {
+            "has_event": True,
+            "needs_response": False,
+            "urgency": "low",
+            "summary": "Lunch today",
+            "event": {
+                "title": "Lunch with Aryan Gupta",
+                "date": "2026-04-01",
+                "start_time": "15:00",
+                "end_time": "16:00",
+                "location": "Illini Union",
+                "is_online": False,
+            },
+            "action_items": [],
+            "can_wait": True,
+        }
+
+    async def fake_send_summary(**kwargs):
+        del kwargs
+        return None
+
+    monkeypatch.setattr("pipeline.parse_email", fake_parse_email)
+    monkeypatch.setattr("pipeline.send_summary", fake_send_summary)
+
+    calendar = _FakeCalendar()
+    gmail = _FakeGmail()
+
+    result = await process_single_email(
+        {"id": "gmail-5", "thread_id": "thread-5", "body": "lunch"},
+        gmail,
+        calendar,
+        _EstimateDeniedTravel(),
+    )
+
+    assert result["calendar_status"] == "created"
+    assert any("Travel estimate unavailable" in note for note in result["processing_notes"])

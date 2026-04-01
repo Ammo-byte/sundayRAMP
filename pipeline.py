@@ -10,6 +10,7 @@ import logging
 from calendar_manager import CalendarManager
 from config import Config
 from email_parser import enrich_event_details, get_calendar_readiness_issues, parse_email, summarise_parsed
+from errors import ConfigurationError, TravelEstimationError
 from gmail_watcher import GmailWatcher
 from messenger import send_summary
 from travel_estimator import TravelEstimator
@@ -78,14 +79,28 @@ async def process_single_email(
         else:
             event = parsed["event"]
             if not event.get("is_online") and event.get("location"):
-                resolved_location = await travel.resolve_destination(event["location"])
-                event["location"] = resolved_location["display_location"]
+                routing_destination = event["location"]
+
+                try:
+                    resolved_location = await travel.resolve_destination(event["location"])
+                except (ConfigurationError, TravelEstimationError) as exc:
+                    log.warning("  → Exact address lookup unavailable: %s", exc)
+                    processing_notes.append(f"Exact address lookup unavailable: {exc}")
+                else:
+                    event["location"] = resolved_location["display_location"]
+                    routing_destination = resolved_location["routing_destination"]
+
                 departure = f"{event['date']}T{event['start_time']}:00"
-                travel_info = await travel.estimate(
-                    destination=resolved_location["routing_destination"],
-                    departure_time=departure,
-                )
-                log.info("  → Travel: %d min", travel_info["travel_minutes"])
+                try:
+                    travel_info = await travel.estimate(
+                        destination=routing_destination,
+                        departure_time=departure,
+                    )
+                except (ConfigurationError, TravelEstimationError) as exc:
+                    log.warning("  → Travel estimation unavailable: %s", exc)
+                    processing_notes.append(f"Travel estimate unavailable: {exc}")
+                else:
+                    log.info("  → Travel: %d min", travel_info["travel_minutes"])
 
             calendar_result = calendar.create_smart_event(
                 event,
