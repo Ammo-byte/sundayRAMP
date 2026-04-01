@@ -177,3 +177,39 @@ def test_enrich_event_details_excludes_the_user_when_sender_is_self():
     )
 
     assert enriched["event"]["title"] == "Lunch with Aryan Gupta"
+
+
+def test_enrich_event_details_normalizes_calendar_capitalization():
+    enriched = enrich_event_details(
+        {
+            "has_event": True,
+            "needs_response": False,
+            "urgency": "low",
+            "summary": "dinner with aryan gupta tonight",
+            "event": {
+                "title": "dinner with aryan gupta",
+                "date": "2026-04-01",
+                "start_time": "21:00",
+                "end_time": "22:00",
+                "location": "601 s 6th st #102, champaign, il 61820",
+                "is_online": False,
+                "meeting_link": None,
+                "description": None,
+                "attendees": [],
+                "organizer": "aryan gupta",
+            },
+            "action_items": [],
+            "can_wait": True,
+        },
+        {
+            "from": "Aryan Gupta <aryan05g@gmail.com>",
+            "to": "User <me@example.com>",
+            "account_email": "me@example.com",
+            "subject": "",
+            "body": "dinner with aryan gupta at 601 s 6th st #102, champaign, il 61820",
+        },
+    )
+
+    assert enriched["event"]["title"] == "Dinner with Aryan Gupta"
+    assert enriched["event"]["organizer"] == "Aryan Gupta"
+    assert enriched["event"]["location"] == "601 S 6th St #102, Champaign, IL 61820"

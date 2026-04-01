@@ -199,6 +199,94 @@ EVENT_DURATION_HINTS: tuple[tuple[tuple[str, ...], int], ...] = (
     (("brunch", "dinner"), 90),
 )
 
+_SMALL_TITLE_WORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "but",
+    "by",
+    "for",
+    "from",
+    "in",
+    "nor",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "up",
+    "via",
+    "with",
+}
+_UPPERCASE_ADDRESS_TOKENS = {
+    "n",
+    "s",
+    "e",
+    "w",
+    "ne",
+    "nw",
+    "se",
+    "sw",
+    "al",
+    "ak",
+    "az",
+    "ar",
+    "ca",
+    "co",
+    "ct",
+    "dc",
+    "de",
+    "fl",
+    "ga",
+    "hi",
+    "ia",
+    "id",
+    "il",
+    "in",
+    "ks",
+    "ky",
+    "la",
+    "ma",
+    "md",
+    "me",
+    "mi",
+    "mn",
+    "mo",
+    "ms",
+    "mt",
+    "nc",
+    "nd",
+    "ne",
+    "nh",
+    "nj",
+    "nm",
+    "nv",
+    "ny",
+    "oh",
+    "ok",
+    "or",
+    "pa",
+    "ri",
+    "sc",
+    "sd",
+    "tn",
+    "tx",
+    "ut",
+    "va",
+    "vt",
+    "wa",
+    "wi",
+    "wv",
+    "wy",
+    "uiuc",
+    "ece",
+    "eceb",
+    "cs",
+    "csl",
+}
+
 
 def _today_local_date() -> str:
     """Return today's date in the configured timezone."""
@@ -256,6 +344,136 @@ def _natural_join(values: list[str]) -> str:
     if len(values) == 2:
         return f"{values[0]} and {values[1]}"
     return f"{', '.join(values[:-1])}, and {values[-1]}"
+
+
+def _capitalize_core_word(
+    word: str,
+    *,
+    is_first: bool,
+    location_mode: bool,
+    sentence_mode: bool,
+) -> str:
+    """Capitalize one word while preserving common small words and address tokens."""
+    if not word:
+        return word
+
+    lower = word.lower()
+    if location_mode and lower in _UPPERCASE_ADDRESS_TOKENS:
+        return lower.upper()
+    if word.isupper() and len(word) <= 5:
+        return word
+    if lower in _SMALL_TITLE_WORDS and not is_first:
+        return lower
+    if any(char.isdigit() for char in word):
+        return word[0].upper() + word[1:] if word[0].isalpha() else word
+    if sentence_mode and not is_first:
+        if word[:1].isupper():
+            return word
+        return lower
+    return word[0].upper() + word[1:].lower()
+
+
+def _capitalize_token(
+    token: str,
+    *,
+    is_first: bool,
+    location_mode: bool,
+    sentence_mode: bool,
+) -> str:
+    """Capitalize a token while preserving punctuation and separators."""
+    if not token or token.isspace():
+        return token
+
+    match = re.match(r"^([^A-Za-z0-9]*)(.*?)([^A-Za-z0-9]*)$", token)
+    if not match:
+        return token
+
+    prefix, core, suffix = match.groups()
+    if not core:
+        return token
+
+    if "/" in core and core.lower() != "w/":
+        parts = core.split("/")
+        rebuilt = "/".join(
+            _capitalize_core_word(
+                part,
+                is_first=is_first and index == 0,
+                location_mode=location_mode,
+                sentence_mode=sentence_mode,
+            )
+            for index, part in enumerate(parts)
+        )
+        return f"{prefix}{rebuilt}{suffix}"
+
+    if "-" in core:
+        parts = core.split("-")
+        rebuilt = "-".join(
+            _capitalize_core_word(
+                part,
+                is_first=is_first and index == 0,
+                location_mode=location_mode,
+                sentence_mode=sentence_mode,
+            )
+            for index, part in enumerate(parts)
+        )
+        return f"{prefix}{rebuilt}{suffix}"
+
+    if core.lower().endswith("'s") and len(core) > 2:
+        rebuilt = _capitalize_core_word(
+            core[:-2],
+            is_first=is_first,
+            location_mode=location_mode,
+            sentence_mode=sentence_mode,
+        ) + "'s"
+        return f"{prefix}{rebuilt}{suffix}"
+
+    rebuilt = _capitalize_core_word(
+        core,
+        is_first=is_first,
+        location_mode=location_mode,
+        sentence_mode=sentence_mode,
+    )
+    return f"{prefix}{rebuilt}{suffix}"
+
+
+def _smart_capitalize_phrase(
+    text: str,
+    *,
+    location_mode: bool = False,
+    sentence_mode: bool = False,
+) -> str:
+    """Apply readable capitalization to titles, names, and raw location strings."""
+    pieces = re.split(r"(\s+)", text.strip())
+    result: list[str] = []
+    seen_word = False
+
+    for piece in pieces:
+        if not piece:
+            continue
+        if piece.isspace():
+            result.append(piece)
+            continue
+
+        result.append(
+            _capitalize_token(
+                piece,
+                is_first=not seen_word,
+                location_mode=location_mode,
+                sentence_mode=sentence_mode,
+            )
+        )
+        if re.search(r"[A-Za-z0-9]", piece):
+            seen_word = True
+
+    return "".join(result).strip()
+
+
+def _apply_exact_name_casing(text: str, names: list[str]) -> str:
+    """Replace case-insensitive name matches with their exact preferred casing."""
+    result = text
+    for name in sorted({name.strip() for name in names if name and name.strip()}, key=len, reverse=True):
+        result = re.sub(re.escape(name), name, result, flags=re.IGNORECASE)
+    return result
 
 
 def _other_party_names(parsed: dict, email_data: dict) -> list[str]:
@@ -398,6 +616,20 @@ def enrich_event_details(parsed: dict, email_data: dict) -> dict:
             event["title"],
             _other_party_names(parsed, email_data),
         )
+
+    exact_names = _other_party_names(parsed, email_data)
+    organizer = (event.get("organizer") or "").strip()
+    if organizer:
+        organizer = _smart_capitalize_phrase(organizer)
+        event["organizer"] = organizer
+        exact_names.append(organizer)
+
+    if event.get("title"):
+        event["title"] = _smart_capitalize_phrase(event["title"], sentence_mode=True)
+        event["title"] = _apply_exact_name_casing(event["title"], exact_names)
+
+    if event.get("location"):
+        event["location"] = _smart_capitalize_phrase(event["location"], location_mode=True)
 
     if not event.get("end_time"):
         inferred_end_time = _infer_end_time(event.get("date"), event.get("start_time"), context)
