@@ -49,11 +49,13 @@ class _FakeTravel:
         del context_text
         if destination == "Illini Union":
             return {
+                "canonical_name": None,
                 "formatted_address": "1401 W Green St, Urbana, IL 61801",
                 "display_location": "Illini Union (1401 W Green St, Urbana, IL 61801)",
                 "routing_destination": "1401 W Green St, Urbana, IL 61801",
             }
         return {
+            "canonical_name": None,
             "formatted_address": destination,
             "display_location": destination,
             "routing_destination": destination,
@@ -520,6 +522,59 @@ async def test_process_single_email_uses_latest_prior_calendar_location_as_origi
     assert result["calendar_status"] == "created"
     assert travel.last_estimate_args["origin"] == "Siebel Center"
     assert travel.last_estimate_args["origin_source"] == "calendar_context"
+
+
+@pytest.mark.anyio
+async def test_process_single_email_replaces_typoed_venue_name_in_title(monkeypatch):
+    async def fake_parse_email(email_data):
+        del email_data
+        return {
+            "has_event": True,
+            "needs_response": False,
+            "urgency": "low",
+            "summary": "Dinner at Oozu Rameern tonight",
+            "event": {
+                "title": "Dinner at Oozu Rameern with Aryan Gupta",
+                "date": "2026-04-01",
+                "start_time": "21:00",
+                "end_time": "22:00",
+                "location": "Oozu Rameern",
+                "is_online": False,
+            },
+            "action_items": [],
+            "can_wait": True,
+        }
+
+    class _CanonicalizingTravel(_FakeTravel):
+        async def resolve_destination(self, destination, context_text=None):
+            del destination, context_text
+            return {
+                "canonical_name": "Oozu Ramen",
+                "formatted_address": "601 S 6th St #102, Champaign, IL 61820",
+                "display_location": "Oozu Ramen (601 S 6th St #102, Champaign, IL 61820)",
+                "routing_destination": "601 S 6th St #102, Champaign, IL 61820",
+            }
+
+    async def fake_send_summary(**kwargs):
+        del kwargs
+        return None
+
+    monkeypatch.setattr("pipeline.parse_email", fake_parse_email)
+    monkeypatch.setattr("pipeline.send_summary", fake_send_summary)
+
+    calendar = _FakeCalendar()
+    gmail = _FakeGmail()
+
+    result = await process_single_email(
+        {"id": "gmail-typo-1", "thread_id": "thread-typo-1", "body": "dinner"},
+        gmail,
+        calendar,
+        _CanonicalizingTravel(),
+    )
+
+    assert result["calendar_status"] == "created"
+    assert calendar.last_event["title"] == "Dinner at Oozu Ramen with Aryan Gupta"
+    assert calendar.last_event["location"] == "Oozu Ramen (601 S 6th St #102, Champaign, IL 61820)"
 
 
 @pytest.mark.anyio

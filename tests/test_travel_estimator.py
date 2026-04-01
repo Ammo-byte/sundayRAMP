@@ -128,6 +128,7 @@ async def test_travel_estimator_resolves_exact_destination_address(monkeypatch):
         "travel_estimator.httpx.AsyncClient",
         lambda timeout: _FakeMultiAsyncClient(
             {
+                TravelEstimator.PLACES_TEXTSEARCH_URL: {"status": "ZERO_RESULTS", "results": []},
                 TravelEstimator.GEOCODE_URL: geocode_payload,
             }
         ),
@@ -144,19 +145,22 @@ async def test_travel_estimator_resolves_exact_destination_address(monkeypatch):
 @pytest.mark.anyio
 async def test_travel_estimator_retries_ambiguous_restaurant_names_with_context(monkeypatch):
     def resolver(url, params):
-        assert url == TravelEstimator.GEOCODE_URL
-        query = params["address"]
-        if query == "Chili's":
+        if url == TravelEstimator.PLACES_TEXTSEARCH_URL:
+            query = params["query"]
+            if query == "Chili's":
+                return {"status": "ZERO_RESULTS", "results": []}
+            if "grill" in query.lower() or "restaurant" in query.lower():
+                return {
+                    "status": "OK",
+                    "results": [
+                        {
+                            "name": "Chili's Grill & Bar",
+                            "formatted_address": "702 W Town Center Blvd, Champaign, IL 61822, USA",
+                        }
+                    ],
+                }
             return {"status": "ZERO_RESULTS", "results": []}
-        if "grill" in query.lower() or "restaurant" in query.lower():
-            return {
-                "status": "OK",
-                "results": [
-                    {
-                        "formatted_address": "702 W Town Center Blvd, Champaign, IL 61822, USA",
-                    }
-                ],
-            }
+        assert url == TravelEstimator.GEOCODE_URL
         return {"status": "ZERO_RESULTS", "results": []}
 
     client = _QueryAwareAsyncClient(resolver)
@@ -174,10 +178,12 @@ async def test_travel_estimator_retries_ambiguous_restaurant_names_with_context(
     resolved = await estimator.resolve_destination("Chili's", context_text="Dinner at Chili's with Aryan")
 
     assert resolved["formatted_address"] == "702 W Town Center Blvd, Champaign, IL 61822"
-    assert resolved["display_location"] == "Chili's (702 W Town Center Blvd, Champaign, IL 61822)"
-    assert any(params.get("address") == "Chili's" for _, params in client.calls)
+    assert resolved["canonical_name"] == "Chili's Grill & Bar"
+    assert resolved["display_location"] == "Chili's Grill & Bar (702 W Town Center Blvd, Champaign, IL 61822)"
+    assert any(params.get("query") == "Chili's" for _, params in client.calls if "query" in params)
     assert any(
-        "restaurant" in params.get("address", "").lower() or "grill" in params.get("address", "").lower()
+        "restaurant" in params.get("query", "").lower() or "grill" in params.get("query", "").lower()
         for _, params in client.calls
+        if "query" in params
     )
-    assert all("bounds" in params for _, params in client.calls)
+    assert all("location" in params and "radius" in params for _, params in client.calls if "query" in params)

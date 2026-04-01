@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -160,6 +161,19 @@ def _destination_context_text(parsed: dict, email_data: dict) -> str:
         email_data.get("body", ""),
     ]
     return " ".join(part for part in parts if part).strip()
+
+
+def _replace_venue_name(text: str | None, original: str | None, canonical: str | None) -> str | None:
+    """Replace an original venue string with a canonical one when it appears in text."""
+    if not text or not original or not canonical:
+        return text
+    if original.strip().lower() == canonical.strip().lower():
+        return text
+
+    pattern = re.compile(re.escape(original.strip()), re.IGNORECASE)
+    if not pattern.search(text):
+        return text
+    return pattern.sub(canonical.strip(), text)
 
 
 def _google_event_dt(event_item: dict, edge: str) -> datetime | None:
@@ -367,6 +381,13 @@ async def process_single_email(
                     log.warning("  → Exact address lookup unavailable: %s", exc)
                     processing_notes.append(f"Exact address lookup unavailable: {exc}")
                 else:
+                    canonical_name = resolved_location.get("canonical_name")
+                    if canonical_name:
+                        event["title"] = _replace_venue_name(
+                            event.get("title"),
+                            event["location"],
+                            canonical_name,
+                        )
                     event["location"] = resolved_location["display_location"]
                     routing_destination = resolved_location["routing_destination"]
 

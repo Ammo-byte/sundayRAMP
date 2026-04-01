@@ -29,6 +29,7 @@ class TravelEstimator:
 
     BASE_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
     GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+    PLACES_TEXTSEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
     _LOCAL_BIAS_PADDING = 0.15
 
     @staticmethod
@@ -57,6 +58,11 @@ class TravelEstimator:
         """Normalise Google's formatted addresses for friendlier user output."""
         return re.sub(r",\s*USA$", "", address.strip())
 
+    @staticmethod
+    def _clean_place_name(name: str) -> str:
+        """Return a compact canonical place name from Google data."""
+        return re.sub(r"\s+", " ", name.strip())
+
     @classmethod
     def _addresses_equivalent(cls, left: str, right: str) -> bool:
         """Return true when two location strings are effectively the same."""
@@ -80,6 +86,21 @@ class TravelEstimator:
         southwest = f"{min(lats) - padding},{min(lngs) - padding}"
         northeast = f"{max(lats) + padding},{max(lngs) + padding}"
         return f"{southwest}|{northeast}"
+
+    @classmethod
+    def _local_search_circle(cls) -> tuple[str | None, int | None]:
+        """Return a local search center/radius for place searches."""
+        points = [
+            (Config.default_home_lat, Config.default_home_lng),
+            (Config.default_work_lat, Config.default_work_lng),
+        ]
+        coords = [(lat, lng) for lat, lng in points if lat is not None and lng is not None]
+        if not coords:
+            return None, None
+
+        center_lat = sum(lat for lat, _ in coords) / len(coords)
+        center_lng = sum(lng for _, lng in coords) / len(coords)
+        return f"{center_lat},{center_lng}", 30000
 
     @staticmethod
     def _looks_like_bare_place_name(destination: str) -> bool:
@@ -159,6 +180,26 @@ class TravelEstimator:
         resp.raise_for_status()
         return resp.json()
 
+    async def _places_text_search(
+        self,
+        client: httpx.AsyncClient,
+        query: str,
+        location: str | None = None,
+        radius: int | None = None,
+    ) -> dict:
+        """Perform one Places text-search request for business/venue names."""
+        params: dict[str, str | int] = {
+            "query": query,
+            "key": Config.google_maps_key,
+        }
+        if location and radius:
+            params["location"] = location
+            params["radius"] = radius
+
+        resp = await client.get(self.PLACES_TEXTSEARCH_URL, params=params)
+        resp.raise_for_status()
+        return resp.json()
+
     async def resolve_destination(self, destination: str, context_text: str | None = None) -> dict:
         """
         Resolve a human place name to a friendlier display string and exact address.
@@ -178,10 +219,54 @@ class TravelEstimator:
             )
 
         bounds = self._local_search_bounds()
+        search_location, search_radius = self._local_search_circle()
         queries = self._destination_queries(destination, context_text)
 
         try:
             async with httpx.AsyncClient(timeout=10) as client:
+                place_match: dict | None = None
+                if self._looks_like_bare_place_name(destination):
+                    for query in queries:
+                        places_data = await self._places_text_search(
+                            client,
+                            query,
+                            location=search_location,
+                            radius=search_radius,
+                        )
+                        status = places_data.get("status")
+                        if status == "OK" and places_data.get("results"):
+                            place_match = places_data["results"][0]
+                            break
+                        if status in {"ZERO_RESULTS", "NOT_FOUND"}:
+                            continue
+                        if status and status != "OK":
+                            log.debug(
+                                "Places text search unavailable for %r via query %r: %s",
+                                destination,
+                                query,
+                                status,
+                            )
+                            break
+
+                if place_match:
+                    place_name = self._clean_place_name(place_match.get("name", "") or destination)
+                    formatted_address = self._clean_formatted_address(
+                        place_match.get("formatted_address", "") or destination
+                    )
+                    display_location = place_name
+                    if formatted_address and not self._addresses_equivalent(place_name, formatted_address):
+                        display_location = f"{place_name} ({formatted_address})"
+                    elif formatted_address:
+                        display_location = formatted_address
+
+                    return {
+                        "query": destination,
+                        "canonical_name": place_name,
+                        "formatted_address": formatted_address,
+                        "display_location": display_location,
+                        "routing_destination": formatted_address or place_name or destination,
+                    }
+
                 data: dict | None = None
                 last_zero_results = False
 
@@ -206,6 +291,7 @@ class TravelEstimator:
         if status == "ZERO_RESULTS":
             return {
                 "query": destination,
+                "canonical_name": None,
                 "formatted_address": None,
                 "display_location": destination,
                 "routing_destination": destination,
@@ -231,6 +317,7 @@ class TravelEstimator:
 
         return {
             "query": destination,
+            "canonical_name": None,
             "formatted_address": formatted_address,
             "display_location": display_location,
             "routing_destination": formatted_address or destination,
