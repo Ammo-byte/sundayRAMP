@@ -634,10 +634,16 @@ export function SettingsScreen() {
                         key={field.key}
                         style={[
                           styles.fieldRow,
+                          field.kind === "boolean" && styles.fieldRowInline,
                           index !== section.fields.length - 1 && styles.fieldRowBorder,
                         ]}
                       >
-                        <View style={styles.fieldHeader}>
+                        <View
+                          style={[
+                            styles.fieldHeader,
+                            field.kind === "boolean" && styles.fieldHeaderInline,
+                          ]}
+                        >
                           <Text style={styles.fieldLabel}>{field.label}</Text>
                           {field.description ? (
                             <Text style={styles.fieldDescription}>{field.description}</Text>
@@ -817,12 +823,21 @@ const styles = StyleSheet.create({
     backgroundColor: PANEL,
     gap: 12,
   },
+  fieldRowInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   fieldRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
   fieldHeader: {
     gap: 4,
+  },
+  fieldHeaderInline: {
+    flex: 1,
+    paddingRight: 16,
   },
   fieldLabel: {
     color: "#ffffff",
