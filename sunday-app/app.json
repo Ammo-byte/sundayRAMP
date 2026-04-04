@@ -20,7 +20,8 @@
     },
     "plugins": [
       "expo-notifications",
-      "expo-location"
+      "expo-location",
+      "expo-video"
     ],
     "android": {
       "adaptiveIcon": {
