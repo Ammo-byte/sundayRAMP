@@ -1221,8 +1221,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   locationValueButton: {
-    flex: 1,
     minHeight: 36,
+    maxWidth: "100%",
+    flexShrink: 1,
     borderRadius: 999,
     backgroundColor: PANEL_ALT,
     marginLeft: 6,
@@ -1234,7 +1235,7 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontFamily: FONTS.regular,
     fontSize: 14,
-    textAlign: "left",
+    textAlign: "right",
   },
   locationValuePlaceholder: {
     color: "#6f6f6f",
