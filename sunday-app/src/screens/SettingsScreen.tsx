@@ -1028,7 +1028,11 @@ export function SettingsScreen() {
           visible
           onRequestClose={closeTimezonePicker}
         >
-          <Animated.View style={[styles.sheetOverlay, { opacity: timezoneBackdropOpacity }]}>
+          <View style={styles.sheetModalRoot}>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.sheetBackdrop, { opacity: timezoneBackdropOpacity }]}
+            />
             <Pressable style={StyleSheet.absoluteFill} onPress={closeTimezonePicker} />
             <Animated.View
               style={[
@@ -1066,7 +1070,7 @@ export function SettingsScreen() {
                 </Picker>
               </View>
             </Animated.View>
-          </Animated.View>
+          </View>
         </Modal>
       ) : null}
     </SafeAreaView>
@@ -1314,9 +1318,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  sheetOverlay: {
+  sheetModalRoot: {
     flex: 1,
     justifyContent: "flex-end",
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.3)",
   },
   sheetPanel: {
