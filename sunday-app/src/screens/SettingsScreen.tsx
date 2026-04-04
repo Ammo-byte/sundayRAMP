@@ -48,7 +48,7 @@ const TOGGLE_OFF = "#1a1a1a";
 const TOGGLE_ON = "#5f5f5f";
 const AUTOSAVE_DELAY_MS = 500;
 const SETTINGS_RETRY_DELAY_MS = 2000;
-const KEYBOARD_ROW_CLEARANCE = 52;
+const KEYBOARD_ROW_CLEARANCE = 18;
 const TIMEZONE_SHEET_OVERDRAW = 72;
 const TIME_SETTING_KEYS = ["WORKDAY_START_TIME", "WORKDAY_END_TIME"] as const;
 type TimeSettingKey = (typeof TIME_SETTING_KEYS)[number];
@@ -1159,7 +1159,7 @@ const styles = StyleSheet.create({
   },
   fieldRow: {
     paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingVertical: 10,
     backgroundColor: PANEL,
     gap: 8,
   },
@@ -1189,7 +1189,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   input: {
-    minHeight: 36,
+    minHeight: 38,
     borderRadius: 999,
     paddingHorizontal: 12,
     color: "#ffffff",
@@ -1198,10 +1198,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   timePicker: {
-    width: Platform.OS === "ios" ? 116 : 126,
+    width: Platform.OS === "ios" ? 118 : 128,
     alignSelf: "center",
-    marginRight: Platform.OS === "ios" ? -9 : 0,
-    transform: Platform.OS === "ios" ? [{ scale: 0.93 }] : undefined,
+    marginRight: Platform.OS === "ios" ? -8 : 0,
+    transform: Platform.OS === "ios" ? [{ scale: 0.95 }] : undefined,
   },
   locationRow: {
     flexDirection: "row",
@@ -1223,7 +1223,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   locationValueButton: {
-    minHeight: 36,
+    minHeight: 38,
     maxWidth: "100%",
     flexShrink: 1,
     borderRadius: 999,
@@ -1253,7 +1253,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Platform.OS === "ios" ? -8 : 0,
   },
   selectTrigger: {
-    minHeight: 36,
+    minHeight: 38,
     maxWidth: 220,
     borderRadius: 999,
     paddingLeft: 11,
@@ -1274,7 +1274,7 @@ const styles = StyleSheet.create({
   },
   numericInput: {
     width: 66,
-    minHeight: 36,
+    minHeight: 38,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 0,
@@ -1300,9 +1300,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   workdayButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: PANEL_ALT,
     alignItems: "center",
     justifyContent: "center",
