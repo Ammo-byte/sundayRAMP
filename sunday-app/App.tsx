@@ -38,8 +38,6 @@ const NAV_WIDTH = SCREEN_WIDTH - NAV_SIDE_INSET * 2;
 const NAV_CONTENT_WIDTH = NAV_WIDTH - NAV_HORIZONTAL_PADDING * 2;
 const NAV_ITEM_WIDTH = (NAV_WIDTH - NAV_HORIZONTAL_PADDING * 2) / TABS.length;
 const INDICATOR_WIDTH = NAV_ITEM_WIDTH - INDICATOR_HORIZONTAL_INSET * 2;
-const INDICATOR_OVERSHOOT = 10;
-const INDICATOR_EDGE_COMPRESS = 12;
 const INDICATOR_EDGE_EXTENSION = 8;
 const RECORD_TAB_INDEX = 1;
 
@@ -60,104 +58,33 @@ function getIndicatorWidth(index: number) {
 function Main() {
   const insets = useSafeAreaInsets();
   const scrollRef = React.useRef<ScrollView>(null);
-  const indicatorTranslateX = React.useRef(new Animated.Value(getIndicatorTarget(INITIAL_INDEX))).current;
-  const indicatorWidth = React.useRef(new Animated.Value(getIndicatorWidth(INITIAL_INDEX))).current;
+  const scrollX = React.useRef(new Animated.Value(INITIAL_INDEX * SCREEN_WIDTH)).current;
   const navTranslateY = React.useRef(new Animated.Value(0)).current;
   const [activeIndex, setActiveIndex] = React.useState(INITIAL_INDEX);
   const [navVisible, setNavVisible] = React.useState(true);
+  const indicatorTranslateX = React.useMemo(
+    () =>
+      scrollX.interpolate({
+        inputRange: TABS.map((_, index) => index * SCREEN_WIDTH),
+        outputRange: TABS.map((_, index) => getIndicatorTarget(index)),
+        extrapolate: "clamp",
+      }),
+    [scrollX],
+  );
+  const indicatorWidth = React.useMemo(
+    () =>
+      scrollX.interpolate({
+        inputRange: TABS.map((_, index) => index * SCREEN_WIDTH),
+        outputRange: TABS.map((_, index) => getIndicatorWidth(index)),
+        extrapolate: "clamp",
+      }),
+    [scrollX],
+  );
   const indicatorIconTranslateX = React.useMemo(
     () => Animated.multiply(indicatorTranslateX, -1),
     [indicatorTranslateX],
   );
   const navHiddenOffset = NAV_HEIGHT + Math.max(insets.bottom, 14) + 18;
-
-  const animateIndicatorToIndex = React.useCallback(
-    (index: number) => {
-      const target = getIndicatorTarget(index);
-      const targetWidth = getIndicatorWidth(index);
-      const maxOffset = (TABS.length - 1) * NAV_ITEM_WIDTH;
-      const isEdge = index === 0 || index === TABS.length - 1;
-
-      indicatorTranslateX.stopAnimation((currentValue: number) => {
-        if (Math.abs(target - currentValue) < 0.5) {
-          return;
-        }
-
-        indicatorWidth.stopAnimation(() => {
-          if (isEdge) {
-            const compressedWidth = targetWidth - INDICATOR_EDGE_COMPRESS;
-            const compressedOffset = index === 0 ? target : target + INDICATOR_EDGE_COMPRESS;
-
-            Animated.sequence([
-              Animated.parallel([
-                Animated.timing(indicatorTranslateX, {
-                  toValue: compressedOffset,
-                  duration: 160,
-                  useNativeDriver: false,
-                }),
-                Animated.timing(indicatorWidth, {
-                  toValue: compressedWidth,
-                  duration: 160,
-                  useNativeDriver: false,
-                }),
-              ]),
-              Animated.parallel([
-                Animated.spring(indicatorTranslateX, {
-                  toValue: target,
-                  speed: 20,
-                  bounciness: 10,
-                  useNativeDriver: false,
-                }),
-                Animated.spring(indicatorWidth, {
-                  toValue: targetWidth,
-                  speed: 20,
-                  bounciness: 8,
-                  useNativeDriver: false,
-                }),
-              ]),
-            ]).start();
-            return;
-          }
-
-          const direction = target >= currentValue ? 1 : -1;
-          const overshoot = Math.min(
-            maxOffset,
-            Math.max(0, target + direction * INDICATOR_OVERSHOOT),
-          );
-
-          Animated.sequence([
-            Animated.parallel([
-              Animated.timing(indicatorTranslateX, {
-                toValue: overshoot,
-                duration: 150,
-                useNativeDriver: false,
-              }),
-              Animated.timing(indicatorWidth, {
-                toValue: targetWidth,
-                duration: 150,
-                useNativeDriver: false,
-              }),
-            ]),
-            Animated.parallel([
-              Animated.spring(indicatorTranslateX, {
-                toValue: target,
-                speed: 20,
-                bounciness: 10,
-                useNativeDriver: false,
-              }),
-              Animated.spring(indicatorWidth, {
-                toValue: targetWidth,
-                speed: 20,
-                bounciness: 8,
-                useNativeDriver: false,
-              }),
-            ]),
-          ]).start();
-        });
-      });
-    },
-    [indicatorTranslateX, indicatorWidth],
-  );
 
   const animateNavVisibility = React.useCallback(
     (visible: boolean) => {
@@ -195,10 +122,9 @@ function Main() {
         animateNavVisibility(true);
       }
       setActiveIndex(index);
-      animateIndicatorToIndex(index);
       scrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
     },
-    [animateIndicatorToIndex, animateNavVisibility, navVisible],
+    [animateNavVisibility, navVisible],
   );
 
   const handleMomentumEnd = React.useCallback(
@@ -208,12 +134,11 @@ function Main() {
         return;
       }
       setActiveIndex(page);
-      animateIndicatorToIndex(page);
       if (page !== RECORD_TAB_INDEX && !navVisible) {
         animateNavVisibility(true);
       }
     },
-    [activeIndex, animateIndicatorToIndex, animateNavVisibility, navVisible],
+    [activeIndex, animateNavVisibility, navVisible],
   );
 
   const handleRecordBackgroundPress = React.useCallback(() => {
@@ -248,6 +173,11 @@ function Main() {
         pagingEnabled
         bounces={false}
         showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: false },
+        )}
         onMomentumScrollEnd={handleMomentumEnd}
         contentOffset={{ x: INITIAL_INDEX * SCREEN_WIDTH, y: 0 }}
       >
