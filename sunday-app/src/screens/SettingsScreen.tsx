@@ -67,13 +67,13 @@ const DEFAULT_TIMEZONE_OPTIONS = [
   "UTC",
 ] as const;
 const WORKDAY_OPTIONS = [
+  { label: "Su", value: "sun" },
   { label: "M", value: "mon" },
   { label: "T", value: "tue" },
   { label: "W", value: "wed" },
   { label: "Th", value: "thu" },
   { label: "F", value: "fri" },
   { label: "Sa", value: "sat" },
-  { label: "Su", value: "sun" },
 ] as const;
 
 type FieldKind = "text" | "number" | "decimal" | "boolean" | "choice" | "select";
@@ -987,14 +987,13 @@ const styles = StyleSheet.create({
   },
   workdayRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   workdayButton: {
-    minWidth: 44,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: PANEL_ALT,
     alignItems: "center",
     justifyContent: "center",
@@ -1005,7 +1004,7 @@ const styles = StyleSheet.create({
   workdayButtonText: {
     color: "#ffffff",
     fontFamily: FONTS.semibold,
-    fontSize: 14,
+    fontSize: 12,
   },
   workdayButtonTextSelected: {
     color: BACKGROUND,
