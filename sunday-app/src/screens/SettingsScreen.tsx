@@ -607,6 +607,23 @@ export function SettingsScreen() {
     );
   }
 
+  if (errorMessage && !hasLoadedSettingsRef.current) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.loadingScreen}>
+          <View style={styles.loadingState}>
+            <Text style={styles.errorTitle}>Couldn&apos;t load settings</Text>
+            <Text style={styles.errorTextCentered}>{errorMessage}</Text>
+            <Pressable onPress={() => void loadSettings()} style={styles.retryButton}>
+              <Text style={styles.retryButtonText}>Try again</Text>
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" />
@@ -875,12 +892,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
+    maxWidth: 320,
   },
   loadingScreen: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
+  },
+  errorTitle: {
+    color: "#ffffff",
+    fontSize: 22,
+    fontFamily: FONTS.semibold,
+    textAlign: "center",
   },
   loadingText: {
     color: MUTED,
@@ -1055,6 +1079,24 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.medium,
     fontSize: 14,
     lineHeight: 20,
+  },
+  errorTextCentered: {
+    color: "#ff7b72",
+    fontFamily: FONTS.medium,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  retryButton: {
+    borderRadius: 999,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+  },
+  retryButtonText: {
+    color: BACKGROUND,
+    fontFamily: FONTS.semibold,
+    fontSize: 14,
   },
   validationText: {
     color: "#ff9d57",

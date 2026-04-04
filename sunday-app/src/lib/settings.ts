@@ -1,5 +1,6 @@
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
 const API_TOKEN = (process.env.EXPO_PUBLIC_API_TOKEN ?? "").trim();
+const SETTINGS_REQUEST_TIMEOUT_MS = 8000;
 
 export type AppSettingsValues = Record<string, string | boolean>;
 
@@ -25,6 +26,29 @@ function buildHeaders() {
   return headers;
 }
 
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs = SETTINGS_REQUEST_TIMEOUT_MS,
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Request timed out. Check that the Sunday backend is reachable.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function parseResponse(response: Response): Promise<AppSettingsResponse> {
   const payload = (await response.json().catch(() => ({}))) as Partial<AppSettingsResponse> & {
     detail?: string;
@@ -44,7 +68,7 @@ export async function fetchAppSettings(): Promise<AppSettingsResponse> {
     throw new Error("EXPO_PUBLIC_API_BASE_URL is not configured.");
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/settings`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/settings`, {
     method: "GET",
     headers: buildHeaders(),
   });
@@ -57,7 +81,7 @@ export async function saveAppSettings(settings: AppSettingsValues): Promise<AppS
     throw new Error("EXPO_PUBLIC_API_BASE_URL is not configured.");
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/settings`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/settings`, {
     method: "PUT",
     headers: buildHeaders(),
     body: JSON.stringify({ settings }),
@@ -74,7 +98,7 @@ export async function reverseGeocodeLocation(
     throw new Error("EXPO_PUBLIC_API_BASE_URL is not configured.");
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/settings/reverse-geocode`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/api/settings/reverse-geocode`, {
     method: "POST",
     headers: buildHeaders(),
     body: JSON.stringify({ latitude, longitude }),
