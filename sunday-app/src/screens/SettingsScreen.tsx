@@ -1089,12 +1089,20 @@ export function SettingsScreen() {
               ]}
             >
               <View style={styles.sheetHeader}>
-                <Pressable hitSlop={10} onPress={closeTimezonePicker}>
-                  <Text style={styles.sheetActionText}>Cancel</Text>
+                <Pressable
+                  hitSlop={10}
+                  onPress={closeTimezonePicker}
+                  style={[styles.sheetHeaderButton, styles.sheetHeaderButtonGhost]}
+                >
+                  <Text style={styles.sheetHeaderButtonGhostText}>Cancel</Text>
                 </Pressable>
                 <Text style={styles.sheetTitle}>Time Zone</Text>
-                <Pressable hitSlop={10} onPress={confirmTimezonePicker}>
-                  <Text style={styles.sheetActionText}>Done</Text>
+                <Pressable
+                  hitSlop={10}
+                  onPress={confirmTimezonePicker}
+                  style={[styles.sheetHeaderButton, styles.sheetHeaderButtonFilled]}
+                >
+                  <Text style={styles.sheetHeaderButtonFilledText}>Done</Text>
                 </Pressable>
               </View>
               <View style={styles.sheetPickerWrap}>
@@ -1396,9 +1404,30 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.semibold,
     fontSize: 16,
   },
-  sheetActionText: {
-    color: "#0a84ff",
-    fontFamily: FONTS.medium,
+  sheetHeaderButton: {
+    minWidth: 72,
+    paddingVertical: 10,
+  },
+  sheetHeaderButtonGhost: {
+    alignItems: "center",
+    borderRadius: 999,
+    backgroundColor: "#1d1d1f",
+    paddingHorizontal: 14,
+  },
+  sheetHeaderButtonFilled: {
+    alignItems: "center",
+    borderRadius: 999,
+    backgroundColor: ACCENT,
+    paddingHorizontal: 14,
+  },
+  sheetHeaderButtonGhostText: {
+    color: MUTED,
+    fontFamily: FONTS.semibold,
+    fontSize: 15,
+  },
+  sheetHeaderButtonFilledText: {
+    color: BACKGROUND,
+    fontFamily: FONTS.semibold,
     fontSize: 16,
   },
   sheetPickerWrap: {
