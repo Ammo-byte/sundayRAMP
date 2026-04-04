@@ -3,7 +3,7 @@ import { StatusBar, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useVideoPlayer, VideoView } from "expo-video";
 
-const BACKGROUND = "#141414";
+const BACKGROUND = "#000000";
 const ORB_VIDEO_URL =
   "https://www.apple.com/105/media/us/siri/2018/ee7c4c16_aae5_4678_9cdd_7ca813baf929/films/siri_orb_large.mp4";
 
@@ -45,17 +45,17 @@ const styles = StyleSheet.create({
     backgroundColor: BACKGROUND,
   },
   orbFrame: {
-    width: 85,
-    height: 85,
-    borderRadius: 42.5,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
   orbVideo: {
-    width: 85,
-    height: 85,
-    borderRadius: 42.5,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
     backgroundColor: "transparent",
   },
 });
