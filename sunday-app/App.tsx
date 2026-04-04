@@ -203,6 +203,7 @@ function Main() {
         horizontal
         pagingEnabled
         bounces={false}
+        decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={Animated.event(
