@@ -841,7 +841,8 @@ export function SettingsScreen() {
                           style={[
                             (field.kind === "boolean" ||
                               isNumericPickerKey(field.key) ||
-                              isTimeSettingKey(field.key)) &&
+                              isTimeSettingKey(field.key) ||
+                              field.key === "TIMEZONE") &&
                               styles.fieldRowInline,
                             styles.fieldRow,
                             index !== section.fields.length - 1 && styles.fieldRowBorder,
@@ -852,7 +853,8 @@ export function SettingsScreen() {
                               styles.fieldHeader,
                               (field.kind === "boolean" ||
                                 isNumericPickerKey(field.key) ||
-                                isTimeSettingKey(field.key)) &&
+                                isTimeSettingKey(field.key) ||
+                                field.key === "TIMEZONE") &&
                                 styles.fieldHeaderInline,
                             ]}
                           >
