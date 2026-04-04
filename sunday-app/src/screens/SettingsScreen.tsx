@@ -650,9 +650,6 @@ export function SettingsScreen() {
                           ]}
                         >
                           <Text style={styles.fieldLabel}>{field.label}</Text>
-                          {field.description ? (
-                            <Text style={styles.fieldDescription}>{field.description}</Text>
-                          ) : null}
                         </View>
 
                         {field.kind === "boolean" ? (
@@ -838,12 +835,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: FONTS.semibold,
   },
-  subtitle: {
-    color: MUTED,
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: FONTS.regular,
-  },
   loadingState: {
     alignItems: "center",
     justifyContent: "center",
@@ -890,7 +881,7 @@ const styles = StyleSheet.create({
     borderBottomColor: BORDER,
   },
   fieldHeader: {
-    gap: 4,
+    gap: 0,
   },
   fieldHeaderInline: {
     flex: 1,
@@ -900,12 +891,6 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontFamily: FONTS.medium,
     fontSize: 16,
-  },
-  fieldDescription: {
-    color: MUTED,
-    fontFamily: FONTS.regular,
-    fontSize: 13,
-    lineHeight: 18,
   },
   input: {
     minHeight: 46,
