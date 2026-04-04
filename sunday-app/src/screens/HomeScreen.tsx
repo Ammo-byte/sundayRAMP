@@ -28,7 +28,7 @@ type HomeScreenProps = {
 export function HomeScreen({ onBackgroundPress }: HomeScreenProps) {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 200);
-  const [isBusy, setIsBusy] = React.useState(false);
+  const [isTogglingRecording, setIsTogglingRecording] = React.useState(false);
   const scale = React.useRef(new Animated.Value(1)).current;
   const isRecording = recorderState.isRecording;
 
@@ -55,24 +55,39 @@ export function HomeScreen({ onBackgroundPress }: HomeScreenProps) {
     });
   }, [scale]);
 
-  const startRecording = React.useCallback(async () => {
-    const permission = await requestRecordingPermissionsAsync();
-    if (!permission.granted) {
-      console.warn("[sunday] microphone permission was denied");
-      return;
+  const transcribeRecording = React.useCallback(async (recordingUrl: string) => {
+    try {
+      console.log("[sunday] uploading recording for transcription");
+      const transcript = await uploadRecordingForTranscription(recordingUrl);
+      console.log("[sunday] transcript:", transcript);
+    } catch (error) {
+      console.error("[sunday] transcription failed", error);
     }
+  }, []);
 
-    await setAudioModeAsync({
-      allowsRecording: true,
-      playsInSilentMode: true,
-    });
-    await recorder.prepareToRecordAsync();
-    recorder.record();
-    console.log("[sunday] recording started");
+  const startRecording = React.useCallback(async () => {
+    setIsTogglingRecording(true);
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        console.warn("[sunday] microphone permission was denied");
+        return;
+      }
+
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      console.log("[sunday] recording started");
+    } finally {
+      setIsTogglingRecording(false);
+    }
   }, [recorder]);
 
   const stopRecording = React.useCallback(async () => {
-    setIsBusy(true);
+    setIsTogglingRecording(true);
     try {
       await recorder.stop();
       await setAudioModeAsync({
@@ -84,18 +99,17 @@ export function HomeScreen({ onBackgroundPress }: HomeScreenProps) {
       }
 
       console.log("[sunday] recording stopped");
-      const transcript = await uploadRecordingForTranscription(recordingUrl);
-      console.log("[sunday] transcript:", transcript);
+      void transcribeRecording(recordingUrl);
     } catch (error) {
-      console.error("[sunday] transcription failed", error);
+      console.error("[sunday] failed to stop recording", error);
     } finally {
-      setIsBusy(false);
+      setIsTogglingRecording(false);
     }
-  }, [recorder, recorderState.url]);
+  }, [recorder, recorderState.url, transcribeRecording]);
 
   const handleDotPress = React.useCallback(async (event?: GestureResponderEvent) => {
     event?.stopPropagation?.();
-    if (isBusy) {
+    if (isTogglingRecording) {
       return;
     }
 
@@ -106,7 +120,7 @@ export function HomeScreen({ onBackgroundPress }: HomeScreenProps) {
     }
 
     await startRecording();
-  }, [isBusy, isRecording, pulseDot, startRecording, stopRecording]);
+  }, [isRecording, isTogglingRecording, pulseDot, startRecording, stopRecording]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -120,7 +134,7 @@ export function HomeScreen({ onBackgroundPress }: HomeScreenProps) {
               {
                 backgroundColor: isRecording ? RECORDING : "#ffffff",
                 transform: [{ scale }],
-                opacity: isBusy ? 0.9 : 1,
+                opacity: isTogglingRecording ? 0.9 : 1,
               },
             ]}
           />

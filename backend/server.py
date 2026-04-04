@@ -370,6 +370,7 @@ async def register_push_token(body: PushTokenRequest):
 @app.post("/api/transcribe", response_model=TranscriptionResponse, dependencies=[Depends(_require_auth)])
 async def transcribe_recording(file: UploadFile = File(...)):
     """Receive an audio recording from the app and transcribe it on the Mac."""
+    log.info("Received recording upload: %s", file.filename or "recording")
     upload_path = await _save_upload_to_temp(file)
     try:
         transcript = await asyncio.to_thread(transcribe_audio_file, upload_path)
