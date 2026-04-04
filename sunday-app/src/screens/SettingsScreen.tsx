@@ -942,7 +942,6 @@ export function SettingsScreen() {
                               <Text numberOfLines={1} style={styles.selectTriggerText}>
                                 {timeZoneDisplayValue || field.placeholder || "Select"}
                               </Text>
-                              <Text style={styles.selectTriggerChevron}>▾</Text>
                             </Pressable>
                           ) : isNumericPickerKey(field.key) ? (
                             (() => {
@@ -1222,11 +1221,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     fontSize: 15,
     textAlign: "left",
-  },
-  selectTriggerChevron: {
-    color: MUTED,
-    fontFamily: FONTS.semibold,
-    fontSize: 16,
   },
   numericInput: {
     width: 76,
