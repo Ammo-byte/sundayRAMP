@@ -1,46 +1,67 @@
 import React from "react";
 import {
-  GestureResponderEvent,
+  Animated,
   Pressable,
   StatusBar,
   StyleSheet,
+  GestureResponderEvent,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const BACKGROUND = "#121212";
 const DOT_SIZE = "50%";
+const RECORDING = "#eb4034";
 
 type HomeScreenProps = {
-  isRecording?: boolean;
   onBackgroundPress?: () => void;
-  onToggleRecording?: () => void;
 };
 
-export function HomeScreen({
-  isRecording = false,
-  onBackgroundPress,
-  onToggleRecording,
-}: HomeScreenProps) {
+export function HomeScreen({ onBackgroundPress }: HomeScreenProps) {
+  const [isRecording, setIsRecording] = React.useState(false);
+  const scale = React.useRef(new Animated.Value(1)).current;
+
   const handleBackgroundPress = React.useCallback(() => {
     onBackgroundPress?.();
   }, [onBackgroundPress]);
 
   const handleDotPress = React.useCallback((event?: GestureResponderEvent) => {
     event?.stopPropagation?.();
-    onToggleRecording?.();
-  }, [onToggleRecording]);
+    scale.stopAnimation(() => {
+      scale.setValue(1);
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.15,
+          duration: 80,
+          useNativeDriver: false,
+        }),
+        Animated.spring(scale, {
+          toValue: 1,
+          speed: 50,
+          bounciness: 10,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    });
+    setIsRecording((current) => !current);
+  }, [scale]);
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" />
       <View style={styles.container}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleBackgroundPress} />
-        {!isRecording ? (
-          <Pressable onPress={handleDotPress} style={styles.centerDotTapTarget}>
-            <View style={styles.centerDot} />
-          </Pressable>
-        ) : null}
+        <Pressable onPress={handleDotPress} style={styles.centerDotTapTarget}>
+          <Animated.View
+            style={[
+              styles.centerDot,
+              {
+                backgroundColor: isRecording ? RECORDING : "#ffffff",
+                transform: [{ scale }],
+              },
+            ]}
+          />
+        </Pressable>
       </View>
     </SafeAreaView>
   );
