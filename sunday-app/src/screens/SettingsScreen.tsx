@@ -583,7 +583,7 @@ export function SettingsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView edges={["left", "right"]} style={styles.safe}>
         <StatusBar barStyle="light-content" />
         <View style={styles.loadingScreen}>
           <View style={styles.loadingState}>
@@ -596,10 +596,12 @@ export function SettingsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView edges={["left", "right"]} style={styles.safe}>
       <StatusBar barStyle="light-content" />
       <ScrollView
+        automaticallyAdjustContentInsets={false}
         bounces
+        contentInsetAdjustmentBehavior="never"
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -818,7 +820,6 @@ export function SettingsScreen() {
           ))}
 
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-          {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
           {errors.map((error) => (
             <Text key={`error-${error}`} style={styles.validationText}>
               {error}
@@ -1044,11 +1045,6 @@ const styles = StyleSheet.create({
   },
   choiceChipTextSelected: {
     color: BACKGROUND,
-  },
-  statusText: {
-    color: "#cfcfcf",
-    fontFamily: FONTS.medium,
-    fontSize: 14,
   },
   errorText: {
     color: "#ff7b72",
