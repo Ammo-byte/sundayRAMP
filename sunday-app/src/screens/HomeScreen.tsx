@@ -29,21 +29,15 @@ export function HomeScreen() {
 
     Animated.sequence([
       Animated.spring(orbScale, {
-        toValue: 1.16,
-        friction: 4.5,
-        tension: 165,
-        useNativeDriver: true,
-      }),
-      Animated.spring(orbScale, {
-        toValue: 0.98,
-        friction: 5.5,
-        tension: 150,
+        toValue: 1.08,
+        friction: 7,
+        tension: 220,
         useNativeDriver: true,
       }),
       Animated.spring(orbScale, {
         toValue: 1,
-        friction: 6,
-        tension: 115,
+        friction: 8,
+        tension: 210,
         useNativeDriver: true,
       }),
     ]).start(() => {
