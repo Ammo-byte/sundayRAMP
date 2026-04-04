@@ -6,7 +6,6 @@ import { Picker } from "@react-native-picker/picker";
 import {
   ActivityIndicator,
   Animated,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -762,33 +761,28 @@ export function SettingsScreen() {
   return (
     <SafeAreaView edges={["left", "right"]} style={styles.safe}>
       <StatusBar barStyle="light-content" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={0}
-        style={styles.keyboardAvoiding}
+      <ScrollView
+        automaticallyAdjustContentInsets={false}
+        automaticallyAdjustKeyboardInsets
+        bounces
+        contentInsetAdjustmentBehavior="never"
+        contentContainerStyle={styles.content}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          automaticallyAdjustContentInsets={false}
-          automaticallyAdjustKeyboardInsets
-          bounces
-          contentInsetAdjustmentBehavior="never"
-          contentContainerStyle={styles.content}
-          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={[styles.header, { paddingTop: headerTopInset }]}>
-            <Text style={styles.title}>Settings</Text>
-          </View>
+        <View style={[styles.header, { paddingTop: headerTopInset }]}>
+          <Text style={styles.title}>Settings</Text>
+        </View>
 
-          <>
-            {SETTINGS_SECTIONS.map((section) => (
-              <View key={section.title} style={styles.section}>
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <View style={styles.sectionPanel}>
-                  {section.title === "Locations"
-                    ? (
-                        <>
+        <>
+          {SETTINGS_SECTIONS.map((section) => (
+            <View key={section.title} style={styles.section}>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <View style={styles.sectionPanel}>
+                {section.title === "Locations"
+                  ? (
+                      <>
                         {LOCATION_SETTING_GROUPS.map((group) => {
                         const locationValue = String(settings[group.locationKey] ?? "");
 
@@ -837,178 +831,177 @@ export function SettingsScreen() {
                             thumbColor={isPhoneLocationEnabled ? "#ffffff" : "#d6d6d6"}
                           />
                         </View>
-                        </>
-                      )
-                    : section.fields.map((field, index) => {
-                      const rawValue = settings[field.key];
-                      const stringValue = typeof rawValue === "boolean" ? "" : String(rawValue ?? "");
-                      const boolValue = rawValue === true;
+                      </>
+                    )
+                  : section.fields.map((field, index) => {
+                    const rawValue = settings[field.key];
+                    const stringValue = typeof rawValue === "boolean" ? "" : String(rawValue ?? "");
+                    const boolValue = rawValue === true;
 
-                      return (
+                    return (
+                      <View
+                        key={field.key}
+                        style={[
+                          (field.kind === "boolean" ||
+                            isNumericPickerKey(field.key) ||
+                            isTimeSettingKey(field.key) ||
+                            field.key === "TIMEZONE") &&
+                            styles.fieldRowInline,
+                          styles.fieldRow,
+                          index !== section.fields.length - 1 && styles.fieldRowBorder,
+                        ]}
+                      >
                         <View
-                          key={field.key}
                           style={[
+                            styles.fieldHeader,
                             (field.kind === "boolean" ||
                               isNumericPickerKey(field.key) ||
                               isTimeSettingKey(field.key) ||
                               field.key === "TIMEZONE") &&
-                              styles.fieldRowInline,
-                            styles.fieldRow,
-                            index !== section.fields.length - 1 && styles.fieldRowBorder,
+                              styles.fieldHeaderInline,
                           ]}
                         >
-                          <View
-                            style={[
-                              styles.fieldHeader,
-                              (field.kind === "boolean" ||
-                                isNumericPickerKey(field.key) ||
-                                isTimeSettingKey(field.key) ||
-                                field.key === "TIMEZONE") &&
-                                styles.fieldHeaderInline,
-                            ]}
-                          >
-                            <Text style={styles.fieldLabel}>{field.label}</Text>
-                          </View>
-
-                          {field.kind === "boolean" ? (
-                            <Switch
-                              value={boolValue}
-                              onValueChange={(value) => handleToggleChange(field.key, value)}
-                              trackColor={{ false: "#3a3a3a", true: "#4f4f4f" }}
-                              thumbColor={boolValue ? "#ffffff" : "#d6d6d6"}
-                            />
-                          ) : field.key === "WORK_DAYS" ? (
-                            <View style={styles.workdayRow}>
-                              {WORKDAY_OPTIONS.map((option) => {
-                                const selected = parseWorkDays(stringValue).has(option.value);
-                                return (
-                                  <Pressable
-                                    key={option.value}
-                                    onPress={() => handleWorkDayToggle(option.value)}
-                                    style={[
-                                      styles.workdayButton,
-                                      selected && styles.workdayButtonSelected,
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.workdayButtonText,
-                                        selected && styles.workdayButtonTextSelected,
-                                      ]}
-                                    >
-                                      {option.label}
-                                    </Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </View>
-                          ) : isTimeSettingKey(field.key) ? (
-                            (() => {
-                              const timeKey = field.key;
-                              return (
-                                <DateTimePicker
-                                  value={getTimeSettingDate(settings[timeKey])}
-                                  mode="time"
-                                  display={Platform.OS === "ios" ? "compact" : "default"}
-                                  themeVariant="dark"
-                                  onChange={(event, selectedDate) =>
-                                    handleTimeChange(timeKey, event, selectedDate)
-                                  }
-                                  style={styles.timePicker}
-                                />
-                              );
-                            })()
-                          ) : field.key === "TRAVEL_TYPE" ? (
-                            <TravelTypeSelector
-                              value={stringValue || "driving"}
-                              onChange={(value) => handleTextChange(field.key, value)}
-                            />
-                          ) : field.kind === "choice" ? (
-                            <View style={styles.choiceRow}>
-                              {field.options?.map((option) => {
-                                const selected = stringValue === option;
-                                return (
-                                  <Pressable
-                                    key={option}
-                                    onPress={() => handleTextChange(field.key, option)}
-                                    style={[
-                                      styles.choiceChip,
-                                      selected && styles.choiceChipSelected,
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.choiceChipText,
-                                        selected && styles.choiceChipTextSelected,
-                                      ]}
-                                    >
-                                      {option}
-                                    </Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </View>
-                          ) : field.key === "TIMEZONE" ? (
-                            <Pressable onPress={openTimezonePicker} style={styles.selectTrigger}>
-                              <Text numberOfLines={1} style={styles.selectTriggerText}>
-                                {timeZoneDisplayValue || field.placeholder || "Select"}
-                              </Text>
-                            </Pressable>
-                          ) : isNumericPickerKey(field.key) ? (
-                            (() => {
-                              const numericKey = field.key;
-                              return (
-                                <TextInput
-                                  autoCapitalize="none"
-                                  autoCorrect={false}
-                                  inputMode="numeric"
-                                  keyboardAppearance="dark"
-                                  keyboardType="number-pad"
-                                  onChangeText={(value) =>
-                                    handleTextChange(numericKey, value.replace(/[^\d]/g, ""))
-                                  }
-                                  placeholder="0"
-                                  placeholderTextColor="#6f6f6f"
-                                  selectTextOnFocus
-                                  style={styles.numericInput}
-                                  value={stringValue}
-                                />
-                              );
-                            })()
-                          ) : (
-                            <TextInput
-                              autoCapitalize="none"
-                              autoCorrect={false}
-                              keyboardAppearance="dark"
-                              keyboardType={getKeyboardType(field.kind)}
-                              onChangeText={(value) => handleTextChange(field.key, value)}
-                              placeholder={field.placeholder}
-                              placeholderTextColor="#6f6f6f"
-                              style={styles.input}
-                              value={stringValue}
-                            />
-                          )}
+                          <Text style={styles.fieldLabel}>{field.label}</Text>
                         </View>
-                      );
-                  })}
-                </View>
-              </View>
-            ))}
 
-            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-            {errors.map((error) => (
-              <Text key={`error-${error}`} style={styles.validationText}>
-                {error}
-              </Text>
-            ))}
-            {warnings.map((warning) => (
-              <Text key={`warning-${warning}`} style={styles.warningText}>
-                {warning}
-              </Text>
-            ))}
-          </>
-        </ScrollView>
-      </KeyboardAvoidingView>
+                        {field.kind === "boolean" ? (
+                          <Switch
+                            value={boolValue}
+                            onValueChange={(value) => handleToggleChange(field.key, value)}
+                            trackColor={{ false: "#3a3a3a", true: "#4f4f4f" }}
+                            thumbColor={boolValue ? "#ffffff" : "#d6d6d6"}
+                          />
+                        ) : field.key === "WORK_DAYS" ? (
+                          <View style={styles.workdayRow}>
+                            {WORKDAY_OPTIONS.map((option) => {
+                              const selected = parseWorkDays(stringValue).has(option.value);
+                              return (
+                                <Pressable
+                                  key={option.value}
+                                  onPress={() => handleWorkDayToggle(option.value)}
+                                  style={[
+                                    styles.workdayButton,
+                                    selected && styles.workdayButtonSelected,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.workdayButtonText,
+                                      selected && styles.workdayButtonTextSelected,
+                                    ]}
+                                  >
+                                    {option.label}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ) : isTimeSettingKey(field.key) ? (
+                          (() => {
+                            const timeKey = field.key;
+                            return (
+                              <DateTimePicker
+                                value={getTimeSettingDate(settings[timeKey])}
+                                mode="time"
+                                display={Platform.OS === "ios" ? "compact" : "default"}
+                                themeVariant="dark"
+                                onChange={(event, selectedDate) =>
+                                  handleTimeChange(timeKey, event, selectedDate)
+                                }
+                                style={styles.timePicker}
+                              />
+                            );
+                          })()
+                        ) : field.key === "TRAVEL_TYPE" ? (
+                          <TravelTypeSelector
+                            value={stringValue || "driving"}
+                            onChange={(value) => handleTextChange(field.key, value)}
+                          />
+                        ) : field.kind === "choice" ? (
+                          <View style={styles.choiceRow}>
+                            {field.options?.map((option) => {
+                              const selected = stringValue === option;
+                              return (
+                                <Pressable
+                                  key={option}
+                                  onPress={() => handleTextChange(field.key, option)}
+                                  style={[
+                                    styles.choiceChip,
+                                    selected && styles.choiceChipSelected,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.choiceChipText,
+                                      selected && styles.choiceChipTextSelected,
+                                    ]}
+                                  >
+                                    {option}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ) : field.key === "TIMEZONE" ? (
+                          <Pressable onPress={openTimezonePicker} style={styles.selectTrigger}>
+                            <Text numberOfLines={1} style={styles.selectTriggerText}>
+                              {timeZoneDisplayValue || field.placeholder || "Select"}
+                            </Text>
+                          </Pressable>
+                        ) : isNumericPickerKey(field.key) ? (
+                          (() => {
+                            const numericKey = field.key;
+                            return (
+                              <TextInput
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                inputMode="numeric"
+                                keyboardAppearance="dark"
+                                keyboardType="number-pad"
+                                onChangeText={(value) =>
+                                  handleTextChange(numericKey, value.replace(/[^\d]/g, ""))
+                                }
+                                placeholder="0"
+                                placeholderTextColor="#6f6f6f"
+                                selectTextOnFocus
+                                style={styles.numericInput}
+                                value={stringValue}
+                              />
+                            );
+                          })()
+                        ) : (
+                          <TextInput
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            keyboardAppearance="dark"
+                            keyboardType={getKeyboardType(field.kind)}
+                            onChangeText={(value) => handleTextChange(field.key, value)}
+                            placeholder={field.placeholder}
+                            placeholderTextColor="#6f6f6f"
+                            style={styles.input}
+                            value={stringValue}
+                          />
+                        )}
+                      </View>
+                    );
+                })}
+              </View>
+            </View>
+          ))}
+
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+          {errors.map((error) => (
+            <Text key={`error-${error}`} style={styles.validationText}>
+              {error}
+            </Text>
+          ))}
+          {warnings.map((warning) => (
+            <Text key={`warning-${warning}`} style={styles.warningText}>
+              {warning}
+            </Text>
+          ))}
+        </>
+      </ScrollView>
 
       {activeLocationGroup ? (
         <LocationPickerModal
@@ -1081,9 +1074,6 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: BACKGROUND,
-  },
-  keyboardAvoiding: {
-    flex: 1,
   },
   content: {
     paddingHorizontal: 18,
