@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/sunday.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#141414"
-    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -19,6 +14,20 @@
       }
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#000000",
+          "image": "./assets/sunday.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#000000",
+            "image": "./assets/sunday.png",
+            "imageWidth": 160
+          }
+        }
+      ],
       "expo-notifications",
       "expo-location",
       "expo-video"
