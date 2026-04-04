@@ -691,6 +691,8 @@ export function SettingsScreen() {
       setIsTimezonePickerMounted(true);
       timezoneBackdropOpacity.stopAnimation();
       timezoneSheetTranslateY.stopAnimation();
+      timezoneBackdropOpacity.setValue(0);
+      timezoneSheetTranslateY.setValue(34);
       Animated.parallel([
         Animated.timing(timezoneBackdropOpacity, {
           toValue: 1,
@@ -699,8 +701,8 @@ export function SettingsScreen() {
         }),
         Animated.spring(timezoneSheetTranslateY, {
           toValue: 0,
-          speed: 20,
-          bounciness: 7,
+          speed: 18,
+          bounciness: 9,
           useNativeDriver: true,
         }),
       ]).start();
@@ -719,11 +721,18 @@ export function SettingsScreen() {
         duration: 160,
         useNativeDriver: true,
       }),
-      Animated.timing(timezoneSheetTranslateY, {
-        toValue: 20,
-        duration: 160,
-        useNativeDriver: true,
-      }),
+      Animated.sequence([
+        Animated.timing(timezoneSheetTranslateY, {
+          toValue: -8,
+          duration: 70,
+          useNativeDriver: true,
+        }),
+        Animated.timing(timezoneSheetTranslateY, {
+          toValue: 34,
+          duration: 190,
+          useNativeDriver: true,
+        }),
+      ]),
     ]).start(({ finished }) => {
       if (finished) {
         setIsTimezonePickerMounted(false);
