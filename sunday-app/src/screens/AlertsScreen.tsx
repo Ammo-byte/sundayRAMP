@@ -12,8 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { FONTS } from "../constants/fonts";
 
 const BACKGROUND = "#121212";
-const CARD = "#1b1b1b";
-const BORDER = "#2a2a2a";
+const CARD = "#242424";
 const EMPTY = "#8b8b8b";
 
 export type AlertEntry = {
@@ -41,7 +40,7 @@ function renderEmptyState() {
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>No transcriptions yet</Text>
       <Text style={styles.emptyBody}>
-        Start and stop a recording to add an entry here.
+        Recorded notes will show up here.
       </Text>
     </View>
   );
@@ -125,10 +124,8 @@ const styles = StyleSheet.create({
   },
   card: {
     minHeight: 72,
-    borderRadius: 24,
+    borderRadius: 18,
     backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
     paddingHorizontal: 18,
     paddingVertical: 16,
     flexDirection: "row",
