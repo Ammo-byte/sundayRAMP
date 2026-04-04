@@ -62,11 +62,38 @@ function getIndicatorWidth(index: number) {
   return INDICATOR_WIDTH;
 }
 
-function getTabIcon(index: number, isRecordingActive: boolean) {
-  if (index !== RECORD_TAB_INDEX) {
-    return TABS[index].Icon;
-  }
-  return isRecordingActive ? RecordActiveIcon : RecordInactiveIcon;
+type RecordTabIconProps = {
+  size?: number;
+  inactiveColor: string;
+  activeColor: string;
+  progress: Animated.Value;
+};
+
+function RecordTabIcon({
+  size = 24,
+  inactiveColor,
+  activeColor,
+  progress,
+}: RecordTabIconProps) {
+  const inactiveOpacity = React.useMemo(
+    () =>
+      progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 0],
+      }),
+    [progress],
+  );
+
+  return (
+    <View style={[styles.recordIconContainer, { width: size, height: size }]}>
+      <Animated.View style={[styles.recordIconLayer, { opacity: inactiveOpacity }]}>
+        <RecordInactiveIcon size={size} color={inactiveColor} />
+      </Animated.View>
+      <Animated.View style={[styles.recordIconLayer, { opacity: progress }]}>
+        <RecordActiveIcon size={size} color={activeColor} />
+      </Animated.View>
+    </View>
+  );
 }
 
 function Main() {
@@ -74,6 +101,7 @@ function Main() {
   const scrollRef = React.useRef<ScrollView>(null);
   const scrollX = React.useRef(new Animated.Value(INITIAL_INDEX * SCREEN_WIDTH)).current;
   const navTranslateY = React.useRef(new Animated.Value(0)).current;
+  const recordIconProgress = React.useRef(new Animated.Value(0)).current;
   const [activeIndex, setActiveIndex] = React.useState(INITIAL_INDEX);
   const [navVisible, setNavVisible] = React.useState(true);
   const [isRecordingActive, setIsRecordingActive] = React.useState(false);
@@ -199,6 +227,14 @@ function Main() {
     }
   }, [activeIndex, animateNavVisibility, navVisible]);
 
+  React.useEffect(() => {
+    Animated.timing(recordIconProgress, {
+      toValue: isRecordingActive ? 1 : 0,
+      duration: 100,
+      useNativeDriver: false,
+    }).start();
+  }, [isRecordingActive, recordIconProgress]);
+
   const navBarBottom = Math.max(insets.bottom, 14);
 
   const navBarAnimatedStyle = React.useMemo(
@@ -247,16 +283,22 @@ function Main() {
         ]}
       >
         {TABS.map((tab, i) => {
-          const IconComponent = getTabIcon(i, isRecordingActive);
-          const iconColor =
-            i === RECORD_TAB_INDEX && isRecordingActive ? RECORD_ACTIVE_COLOR : INACTIVE_COLOR;
           return (
             <Pressable
               key={tab.key}
               onPress={() => handleTabPress(i)}
               style={styles.navItem}
             >
-              <IconComponent size={28} color={iconColor} />
+              {i === RECORD_TAB_INDEX ? (
+                <RecordTabIcon
+                  size={28}
+                  inactiveColor={INACTIVE_COLOR}
+                  activeColor={RECORD_ACTIVE_COLOR}
+                  progress={recordIconProgress}
+                />
+              ) : (
+                <tab.Icon size={28} color={INACTIVE_COLOR} />
+              )}
             </Pressable>
           );
         })}
@@ -280,16 +322,19 @@ function Main() {
             ]}
           >
             {TABS.map((tab, i) => {
-              const IconComponent = getTabIcon(i, isRecordingActive);
-              const iconColor =
-                i === RECORD_TAB_INDEX && isRecordingActive
-                  ? RECORD_ACTIVE_COLOR
-                  : SELECTED_ICON_COLOR;
-
               return (
-              <View key={`${tab.key}-selected`} style={styles.indicatorIconSlot}>
-                <IconComponent size={28} color={iconColor} />
-              </View>
+                <View key={`${tab.key}-selected`} style={styles.indicatorIconSlot}>
+                  {i === RECORD_TAB_INDEX ? (
+                    <RecordTabIcon
+                      size={28}
+                      inactiveColor={SELECTED_ICON_COLOR}
+                      activeColor={RECORD_ACTIVE_COLOR}
+                      progress={recordIconProgress}
+                    />
+                  ) : (
+                    <tab.Icon size={28} color={SELECTED_ICON_COLOR} />
+                  )}
+                </View>
               );
             })}
           </Animated.View>
@@ -364,6 +409,19 @@ const styles = StyleSheet.create({
   indicatorIconSlot: {
     width: NAV_ITEM_WIDTH,
     height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recordIconContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recordIconLayer: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     alignItems: "center",
     justifyContent: "center",
   },
