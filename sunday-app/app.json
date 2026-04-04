@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "sunday-app",
-    "slug": "sunday-app",
+    "name": "sunday",
+    "slug": "sunday",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/sunday-splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#141414"
     },
     "ios": {
       "supportsTablet": true,
