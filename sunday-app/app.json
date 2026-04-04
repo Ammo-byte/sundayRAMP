@@ -11,7 +11,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSMicrophoneUsageDescription": "Allow sunday to record your voice so it can transcribe speech."
+        "NSMicrophoneUsageDescription": "Allow sunday to record your voice so it can transcribe speech.",
+        "NSLocationWhenInUseUsageDescription": "Allow sunday to use your phone location when you enable it in settings."
       }
     },
     "plugins": [

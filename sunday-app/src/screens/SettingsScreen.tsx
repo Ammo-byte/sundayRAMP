@@ -23,6 +23,12 @@ import {
 import { TravelTypeSelector } from "../components/TravelTypeSelector";
 import { FONTS } from "../constants/fonts";
 import {
+  getPhoneLocationPermissionState,
+  getPhoneLocationEnabledPreference,
+  requestPhoneLocationAccess,
+  setPhoneLocationEnabledPreference,
+} from "../lib/phoneLocationPreference";
+import {
   AppSettingsValues,
   fetchAppSettings,
   saveAppSettings,
@@ -353,6 +359,7 @@ function formatTimeForBackend(date: Date) {
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [settings, setSettings] = React.useState<AppSettingsValues>(getInitialSettingsState);
+  const [isPhoneLocationEnabled, setIsPhoneLocationEnabled] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -402,6 +409,38 @@ export function SettingsScreen() {
   }, [loadSettings]);
 
   React.useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const storedEnabled = await getPhoneLocationEnabledPreference();
+        let enabled = storedEnabled;
+
+        if (storedEnabled) {
+          const permission = await getPhoneLocationPermissionState();
+          if (!permission.granted) {
+            enabled = false;
+            await setPhoneLocationEnabledPreference(false);
+          }
+        }
+
+        if (!cancelled) {
+          setIsPhoneLocationEnabled(enabled);
+        }
+      } catch (error) {
+        console.warn(
+          "[sunday] failed to load phone location preference",
+          error instanceof Error ? error.message : error,
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -441,6 +480,38 @@ export function SettingsScreen() {
       ...current,
       [key]: value,
     }));
+  }, []);
+
+  const handlePhoneLocationToggle = React.useCallback(async (nextValue: boolean) => {
+    setErrorMessage(null);
+
+    if (!nextValue) {
+      setIsPhoneLocationEnabled(false);
+      await setPhoneLocationEnabledPreference(false);
+      return;
+    }
+
+    try {
+      const permission = await requestPhoneLocationAccess();
+      if (permission.granted) {
+        setIsPhoneLocationEnabled(true);
+        await setPhoneLocationEnabledPreference(true);
+        return;
+      }
+
+      setIsPhoneLocationEnabled(false);
+      await setPhoneLocationEnabledPreference(false);
+      setErrorMessage(
+        permission.canAskAgain
+          ? "Location access was denied."
+          : "Enable location access for Sunday in iPhone Settings to use your phone location.",
+      );
+    } catch (error) {
+      setIsPhoneLocationEnabled(false);
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to request location access.",
+      );
+    }
   }, []);
 
   const handleWorkDayToggle = React.useCallback((day: (typeof WORKDAY_OPTIONS)[number]["value"]) => {
@@ -590,7 +661,9 @@ export function SettingsScreen() {
               <Text style={styles.sectionTitle}>{section.title}</Text>
               <View style={styles.sectionPanel}>
                 {section.title === "Locations"
-                  ? LOCATION_SETTING_GROUPS.map((group, index) => {
+                  ? (
+                      <>
+                        {LOCATION_SETTING_GROUPS.map((group) => {
                         const locationValue = String(settings[group.locationKey] ?? "");
 
                         return (
@@ -599,7 +672,7 @@ export function SettingsScreen() {
                             style={[
                               styles.fieldRow,
                               styles.fieldRowInline,
-                              index !== LOCATION_SETTING_GROUPS.length - 1 && styles.fieldRowBorder,
+                              styles.fieldRowBorder,
                             ]}
                           >
                             <View style={[styles.fieldHeader, styles.fieldHeaderInline, styles.locationFieldHeader]}>
@@ -622,7 +695,22 @@ export function SettingsScreen() {
                             </Pressable>
                           </View>
                         );
-                    })
+                        })}
+                        <View style={[styles.fieldRow, styles.fieldRowInline]}>
+                          <View style={[styles.fieldHeader, styles.fieldHeaderInline]}>
+                            <Text style={styles.fieldLabel}>Use your phone location</Text>
+                          </View>
+                          <Switch
+                            value={isPhoneLocationEnabled}
+                            onValueChange={(value) => {
+                              void handlePhoneLocationToggle(value);
+                            }}
+                            trackColor={{ false: "#3a3a3a", true: "#4f4f4f" }}
+                            thumbColor={isPhoneLocationEnabled ? "#ffffff" : "#d6d6d6"}
+                          />
+                        </View>
+                      </>
+                    )
                   : section.fields.map((field, index) => {
                     const rawValue = settings[field.key];
                     const stringValue = typeof rawValue === "boolean" ? "" : String(rawValue ?? "");
