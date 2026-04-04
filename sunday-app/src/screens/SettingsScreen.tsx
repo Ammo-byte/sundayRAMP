@@ -46,6 +46,7 @@ const MUTED = "#8b8b8b";
 const ACCENT = "#ffffff";
 const AUTOSAVE_DELAY_MS = 500;
 const SETTINGS_RETRY_DELAY_MS = 2000;
+const KEYBOARD_ROW_CLEARANCE = 72;
 const TIME_SETTING_KEYS = ["WORKDAY_START_TIME", "WORKDAY_END_TIME"] as const;
 type TimeSettingKey = (typeof TIME_SETTING_KEYS)[number];
 const NUMERIC_PICKER_KEYS = [
@@ -396,6 +397,7 @@ function formatTimeForBackend(date: Date) {
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const scrollViewRef = React.useRef<ScrollView>(null);
   const [settings, setSettings] = React.useState<AppSettingsValues>(getInitialSettingsState);
   const [isPhoneLocationEnabled, setIsPhoneLocationEnabled] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -503,6 +505,26 @@ export function SettingsScreen() {
       [key]: value,
     }));
   }, []);
+
+  const handleTextInputFocus = React.useCallback(
+    (target: number) => {
+      setTimeout(() => {
+        const responder = scrollViewRef.current as ScrollView & {
+          scrollResponderScrollNativeHandleToKeyboard?: (
+            nodeHandle: number,
+            additionalOffset?: number,
+            preventNegativeScrollOffset?: boolean,
+          ) => void;
+        };
+        responder.scrollResponderScrollNativeHandleToKeyboard?.(
+          target,
+          KEYBOARD_ROW_CLEARANCE,
+          true,
+        );
+      }, 40);
+    },
+    [],
+  );
 
   const handleTimeChange = React.useCallback(
     (key: TimeSettingKey, event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -766,6 +788,7 @@ export function SettingsScreen() {
     <SafeAreaView edges={["left", "right"]} style={styles.safe}>
       <StatusBar barStyle="light-content" />
       <ScrollView
+        ref={scrollViewRef}
         automaticallyAdjustContentInsets={false}
         automaticallyAdjustKeyboardInsets
         bounces
@@ -969,6 +992,7 @@ export function SettingsScreen() {
                                 onChangeText={(value) =>
                                   handleTextChange(numericKey, value.replace(/[^\d]/g, ""))
                                 }
+                                onFocus={(event) => handleTextInputFocus(event.nativeEvent.target)}
                                 placeholder="0"
                                 placeholderTextColor="#6f6f6f"
                                 selectTextOnFocus
@@ -984,6 +1008,7 @@ export function SettingsScreen() {
                             keyboardAppearance="dark"
                             keyboardType={getKeyboardType(field.kind)}
                             onChangeText={(value) => handleTextChange(field.key, value)}
+                            onFocus={(event) => handleTextInputFocus(event.nativeEvent.target)}
                             placeholder={field.placeholder}
                             placeholderTextColor="#6f6f6f"
                             style={styles.input}
