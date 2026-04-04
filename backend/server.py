@@ -28,6 +28,7 @@ from .errors import ConfigurationError, TravelEstimationError
 from .logging_utils import setup_logging
 from .pipeline import run_pipeline, send_due_leave_alerts
 from .state_store import get_state_file
+from .title_generation import generate_transcript_title
 from .transcription import TranscriptionError, transcribe_audio_file
 from .travel_estimator import TravelEstimator
 
@@ -98,6 +99,7 @@ class PushTokenRequest(BaseModel):
 
 class TranscriptionResponse(BaseModel):
     text: str
+    summary: str
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -374,8 +376,10 @@ async def transcribe_recording(file: UploadFile = File(...)):
     upload_path = await _save_upload_to_temp(file)
     try:
         transcript = await asyncio.to_thread(transcribe_audio_file, upload_path)
+        summary = await asyncio.to_thread(generate_transcript_title, transcript)
         log.info("Transcribed recording: %s", transcript)
-        return {"text": transcript}
+        log.info("Transcript title: %s", summary)
+        return {"text": transcript, "summary": summary}
     except TranscriptionError as exc:
         log.warning("Transcription failed: %s", exc)
         raise HTTPException(status_code=503, detail=str(exc)) from exc

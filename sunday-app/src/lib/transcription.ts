@@ -3,7 +3,13 @@ const API_TOKEN = (process.env.EXPO_PUBLIC_API_TOKEN ?? "").trim();
 
 type TranscriptionResponse = {
   text?: string;
+  summary?: string;
   detail?: string;
+};
+
+export type TranscriptionResult = {
+  text: string;
+  summary: string;
 };
 
 type ReactNativeUploadFile = {
@@ -22,7 +28,7 @@ function getAudioMimeType(fileName: string) {
   return "audio/m4a";
 }
 
-export async function uploadRecordingForTranscription(uri: string) {
+export async function uploadRecordingForTranscription(uri: string): Promise<TranscriptionResult> {
   if (!API_BASE_URL) {
     throw new Error("EXPO_PUBLIC_API_BASE_URL is not configured.");
   }
@@ -57,5 +63,7 @@ export async function uploadRecordingForTranscription(uri: string) {
     throw new Error("Backend returned an empty transcript.");
   }
 
-  return text;
+  const summary = payload.summary?.trim() || "Untitled Voice Note";
+
+  return { text, summary };
 }

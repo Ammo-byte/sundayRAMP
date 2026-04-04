@@ -206,14 +206,14 @@ function Main() {
     return id;
   }, []);
 
-  const handleTranscript = React.useCallback((entryId: string, transcript: string) => {
+  const handleTranscript = React.useCallback((entryId: string, transcript: string, summary?: string) => {
     setAlertEntries((current) =>
       current.map((entry) =>
         entry.id === entryId
           ? {
               ...entry,
               transcript,
-              summary: summarizeTranscript(transcript),
+              summary: (summary?.trim() || summarizeTranscript(transcript)).trim(),
               status: "complete",
             }
           : entry,

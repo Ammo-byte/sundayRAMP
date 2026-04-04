@@ -25,7 +25,7 @@ const MIN_RECORDING_DURATION_MILLIS = 700;
 type HomeScreenProps = {
   onBackgroundPress?: () => void;
   onTranscriptPending?: () => string;
-  onTranscript?: (entryId: string, transcript: string) => void;
+  onTranscript?: (entryId: string, transcript: string, summary?: string) => void;
   onRecordingChange?: (isRecording: boolean) => void;
 };
 
@@ -71,9 +71,10 @@ export function HomeScreen({
   const transcribeRecording = React.useCallback(async (entryId: string, recordingUrl: string) => {
     try {
       console.log("[sunday] uploading recording for transcription");
-      const transcript = await uploadRecordingForTranscription(recordingUrl);
-      console.log("[sunday] transcript:", transcript);
-      onTranscript?.(entryId, transcript);
+      const result = await uploadRecordingForTranscription(recordingUrl);
+      console.log("[sunday] transcript:", result.text);
+      console.log("[sunday] transcript title:", result.summary);
+      onTranscript?.(entryId, result.text, result.summary);
     } catch (error) {
       console.error("[sunday] transcription failed", error);
     }

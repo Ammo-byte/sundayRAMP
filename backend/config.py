@@ -168,6 +168,16 @@ class Config:
     transcription_threads: int = int(
         os.getenv("TRANSCRIPTION_THREADS", str(min(8, os.cpu_count() or 4)))
     )
+    transcript_title_model_path: str = _resolve_project_path(
+        os.getenv(
+            "TRANSCRIPT_TITLE_MODEL_PATH",
+            "models/text/qwen2.5-0.5b-instruct",
+        )
+    )
+    transcript_title_device: str = os.getenv("TRANSCRIPT_TITLE_DEVICE", "auto").strip() or "auto"
+    transcript_title_max_new_tokens: int = int(
+        os.getenv("TRANSCRIPT_TITLE_MAX_NEW_TOKENS", "12")
+    )
 
     # ── Advanced ──
     max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "1024"))
@@ -294,6 +304,11 @@ class Config:
             warnings.append(
                 f"Speech transcription model not found: '{cls.transcription_model_path}'. "
                 "The /api/transcribe endpoint will stay unavailable until the model is present."
+            )
+        if not Path(cls.transcript_title_model_path).exists():
+            warnings.append(
+                f"Transcript title model not found: '{cls.transcript_title_model_path}'. "
+                "Transcription titles will fall back to a simple heuristic until the model is present."
             )
 
         return {"errors": errors, "warnings": warnings}
