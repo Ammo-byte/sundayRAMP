@@ -85,16 +85,6 @@ const WORKDAY_OPTIONS = [
   { label: "F", value: "fri" },
   { label: "Sa", value: "sat" },
 ] as const;
-const NUMERIC_PICKER_CONFIG: Record<
-  NumericPickerKey,
-  { min: number; max: number; step: number }
-> = {
-  PREP_TIME_MINUTES: { min: 0, max: 120, step: 1 },
-  ONLINE_PREP_MINUTES: { min: 0, max: 120, step: 1 },
-  POLL_INTERVAL_SECONDS: { min: 1, max: 300, step: 1 },
-  MAX_EMAILS_PER_CYCLE: { min: 1, max: 20, step: 1 },
-};
-
 type FieldKind = "text" | "number" | "decimal" | "boolean" | "choice" | "select";
 
 type SettingField = {
@@ -323,24 +313,6 @@ function getTimeZoneOptions() {
     typeof supportedValuesOf === "function" ? supportedValuesOf("timeZone") : [];
   const merged = [...DEFAULT_TIMEZONE_OPTIONS, ...dynamicOptions];
   return [...new Set(merged)].sort((left, right) => left.localeCompare(right));
-}
-
-function getNumericPickerOptions(key: NumericPickerKey, currentValue: string | boolean | undefined) {
-  const config = NUMERIC_PICKER_CONFIG[key];
-  const options: string[] = [];
-  for (let value = config.min; value <= config.max; value += config.step) {
-    options.push(String(value));
-  }
-
-  if (typeof currentValue === "string" && currentValue.trim()) {
-    const trimmed = currentValue.trim();
-    if (!options.includes(trimmed)) {
-      options.push(trimmed);
-      options.sort((left, right) => Number(left) - Number(right));
-    }
-  }
-
-  return options;
 }
 
 function getTimeSettingDate(value: string | boolean | undefined) {
@@ -783,23 +755,20 @@ export function SettingsScreen() {
                           (() => {
                             const numericKey = field.key;
                             return (
-                              <View style={[styles.nativePickerField, styles.numericPickerField]}>
-                                <Picker
-                                  selectedValue={stringValue || getNumericPickerOptions(numericKey, rawValue)[0]}
-                                  onValueChange={(value) => handleTextChange(numericKey, String(value))}
-                                  itemStyle={styles.nativePickerItem}
-                                  style={styles.numericPicker}
-                                >
-                                  {getNumericPickerOptions(numericKey, rawValue).map((option) => (
-                                    <Picker.Item
-                                      key={option}
-                                      label={option}
-                                      value={option}
-                                      color="#ffffff"
-                                    />
-                                  ))}
-                                </Picker>
-                              </View>
+                              <TextInput
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                inputMode="numeric"
+                                keyboardType="number-pad"
+                                onChangeText={(value) =>
+                                  handleTextChange(numericKey, value.replace(/[^\d]/g, ""))
+                                }
+                                placeholder="0"
+                                placeholderTextColor="#6f6f6f"
+                                selectTextOnFocus
+                                style={styles.numericInput}
+                                value={stringValue}
+                              />
                             );
                           })()
                         ) : (
@@ -990,17 +959,16 @@ const styles = StyleSheet.create({
     height: 180,
     marginHorizontal: Platform.OS === "ios" ? -8 : 0,
   },
-  numericPickerField: {
-    width: 82,
-    height: 46,
-    justifyContent: "center",
-    alignSelf: "center",
-  },
-  numericPicker: {
+  numericInput: {
+    width: 76,
+    minHeight: 46,
+    borderRadius: 14,
+    paddingHorizontal: 12,
     color: "#ffffff",
-    height: Platform.OS === "ios" ? 180 : 50,
-    marginHorizontal: Platform.OS === "ios" ? -8 : 0,
-    marginVertical: Platform.OS === "ios" ? -67 : 0,
+    backgroundColor: PANEL_ALT,
+    fontFamily: FONTS.regular,
+    fontSize: 17,
+    textAlign: "right",
   },
   nativePickerItem: {
     color: "#ffffff",
