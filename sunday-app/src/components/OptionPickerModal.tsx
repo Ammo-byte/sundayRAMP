@@ -74,6 +74,7 @@ export function OptionPickerModal({
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
+            keyboardAppearance="dark"
             onChangeText={setQuery}
             placeholder={searchPlaceholder}
             placeholderTextColor="#6f6f6f"
