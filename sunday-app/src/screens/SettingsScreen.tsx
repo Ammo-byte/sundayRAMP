@@ -1,6 +1,8 @@
 import React from "react";
+import { Picker } from "@react-native-picker/picker";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -15,7 +17,6 @@ import {
   LocationPickerModal,
   SelectedLocation,
 } from "../components/LocationPickerModal";
-import { OptionPickerModal } from "../components/OptionPickerModal";
 import { TravelTypeSelector } from "../components/TravelTypeSelector";
 import { FONTS } from "../constants/fonts";
 import {
@@ -379,7 +380,6 @@ export function SettingsScreen() {
   const [warnings, setWarnings] = React.useState<string[]>([]);
   const [errors, setErrors] = React.useState<string[]>([]);
   const [activeLocationGroupId, setActiveLocationGroupId] = React.useState<LocationSettingGroup["id"] | null>(null);
-  const [activeSelectField, setActiveSelectField] = React.useState<SettingField | null>(null);
   const lastSavedSettingsRef = React.useRef("");
   const hasLoadedSettingsRef = React.useRef(false);
   const saveSequenceRef = React.useRef(0);
@@ -598,16 +598,6 @@ export function SettingsScreen() {
     return defaultPickerCoordinate(settings);
   }, [activeLocationGroup, settings]);
 
-  const activeSelectOptions = React.useMemo(() => {
-    if (!activeSelectField) {
-      return [];
-    }
-    if (activeSelectField.key === "TIMEZONE") {
-      return timeZoneOptions;
-    }
-    return activeSelectField.options ?? [];
-  }, [activeSelectField, timeZoneOptions]);
-
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -777,21 +767,24 @@ export function SettingsScreen() {
                             })}
                           </View>
                         ) : field.kind === "select" ? (
-                          <Pressable
-                            onPress={() => setActiveSelectField(field)}
-                            style={styles.selectField}
-                          >
-                            <Text
-                              numberOfLines={1}
-                              style={[
-                                styles.selectFieldText,
-                                !stringValue && styles.selectFieldPlaceholder,
-                              ]}
+                          <View style={styles.selectField}>
+                            <Picker
+                              selectedValue={stringValue || field.placeholder || ""}
+                              onValueChange={(value) => handleTextChange(field.key, String(value))}
+                              dropdownIconColor="#8b8b8b"
+                              itemStyle={styles.selectItem}
+                              style={styles.selectPicker}
                             >
-                              {stringValue || field.placeholder || "Select an option"}
-                            </Text>
-                            <Text style={styles.selectFieldChevron}>▾</Text>
-                          </Pressable>
+                              {(field.key === "TIMEZONE" ? timeZoneOptions : field.options ?? []).map((option) => (
+                                <Picker.Item
+                                  key={option}
+                                  label={option}
+                                  value={option}
+                                  color="#ffffff"
+                                />
+                              ))}
+                            </Picker>
+                          </View>
                         ) : (
                           <TextInput
                             autoCapitalize="none"
@@ -836,25 +829,6 @@ export function SettingsScreen() {
           initialLabel={String(settings[activeLocationGroup.locationKey] ?? "")}
           onClose={() => setActiveLocationGroupId(null)}
           onConfirm={(selection) => handleLocationSelected(activeLocationGroup, selection)}
-        />
-      ) : null}
-
-      {activeSelectField ? (
-        <OptionPickerModal
-          visible
-          title={activeSelectField.label}
-          options={activeSelectOptions}
-          value={String(settings[activeSelectField.key] ?? "")}
-          searchPlaceholder={
-            activeSelectField.key === "TIMEZONE"
-              ? "Search time zones"
-              : "Search options"
-          }
-          onClose={() => setActiveSelectField(null)}
-          onSelect={(option) => {
-            handleTextChange(activeSelectField.key, option);
-            setActiveSelectField(null);
-          }}
         />
       ) : null}
     </SafeAreaView>
@@ -991,27 +965,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   selectField: {
-    minHeight: 46,
+    minHeight: Platform.OS === "ios" ? 176 : 54,
     borderRadius: 14,
-    paddingHorizontal: 14,
     backgroundColor: PANEL_ALT,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    overflow: "hidden",
   },
-  selectFieldText: {
-    flex: 1,
+  selectPicker: {
+    color: "#ffffff",
+    height: Platform.OS === "ios" ? 176 : 54,
+    marginHorizontal: Platform.OS === "ios" ? -8 : 0,
+  },
+  selectItem: {
     color: "#ffffff",
     fontFamily: FONTS.regular,
-    fontSize: 15,
-  },
-  selectFieldPlaceholder: {
-    color: "#6f6f6f",
-  },
-  selectFieldChevron: {
-    color: MUTED,
-    fontFamily: FONTS.semibold,
     fontSize: 16,
   },
   choiceRow: {
