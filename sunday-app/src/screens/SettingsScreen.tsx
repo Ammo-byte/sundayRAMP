@@ -637,7 +637,7 @@ export function SettingsScreen() {
                               style={styles.locationValueButton}
                             >
                               <Text
-                                numberOfLines={2}
+                                numberOfLines={1}
                                 style={[
                                   styles.locationValueText,
                                   !locationValue && styles.locationValuePlaceholder,
