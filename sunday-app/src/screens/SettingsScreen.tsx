@@ -991,12 +991,16 @@ const styles = StyleSheet.create({
     marginHorizontal: Platform.OS === "ios" ? -8 : 0,
   },
   numericPickerField: {
-    width: 110,
+    width: 82,
+    height: 46,
+    justifyContent: "center",
+    alignSelf: "center",
   },
   numericPicker: {
     color: "#ffffff",
-    height: 108,
+    height: Platform.OS === "ios" ? 180 : 50,
     marginHorizontal: Platform.OS === "ios" ? -8 : 0,
+    marginVertical: Platform.OS === "ios" ? -67 : 0,
   },
   nativePickerItem: {
     color: "#ffffff",
