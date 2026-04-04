@@ -18,6 +18,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import httpx
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
@@ -113,6 +114,17 @@ class AppSettingsResponse(BaseModel):
     warnings: list[str]
 
 
+class ReverseGeocodeRequest(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class ReverseGeocodeResponse(BaseModel):
+    label: str
+    latitude: float
+    longitude: float
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _ensure_pipeline_ready() -> None:
@@ -126,6 +138,39 @@ def _extract_meeting_link(description: str | None) -> str | None:
         return None
     match = _MEETING_LINK_RE.search(description)
     return match.group(0) if match else None
+
+
+async def _reverse_geocode_label(latitude: float, longitude: float) -> str:
+    """Return a human-readable address for coordinates, or a coords fallback."""
+    fallback = f"{latitude:.6f}, {longitude:.6f}"
+    if not Config.google_maps_key:
+        return fallback
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                TravelEstimator.GEOCODE_URL,
+                params={
+                    "latlng": f"{latitude},{longitude}",
+                    "key": Config.google_maps_key,
+                },
+            )
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        log.warning("Reverse geocoding failed for %s: %s", fallback, exc)
+        return fallback
+
+    payload = response.json()
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return fallback
+
+    for result in results:
+        formatted = str(result.get("formatted_address") or "").strip()
+        if formatted:
+            return TravelEstimator._clean_formatted_address(formatted)
+
+    return fallback
 
 
 def _map_calendar_event(item: dict) -> dict:
@@ -227,6 +272,21 @@ async def update_settings(body: AppSettingsUpdateRequest):
         "settings": settings,
         "errors": report["errors"],
         "warnings": report["warnings"],
+    }
+
+
+@app.post(
+    "/api/settings/reverse-geocode",
+    response_model=ReverseGeocodeResponse,
+    dependencies=[Depends(_require_auth)],
+)
+async def reverse_geocode_settings_location(body: ReverseGeocodeRequest):
+    """Resolve a picked map point into the saved location label for settings."""
+    label = await _reverse_geocode_label(body.latitude, body.longitude)
+    return {
+        "label": label,
+        "latitude": body.latitude,
+        "longitude": body.longitude,
     }
 
 

@@ -9,6 +9,12 @@ export type AppSettingsResponse = {
   warnings: string[];
 };
 
+export type ReverseGeocodeResponse = {
+  label: string;
+  latitude: number;
+  longitude: number;
+};
+
 function buildHeaders() {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -58,4 +64,32 @@ export async function saveAppSettings(settings: AppSettingsValues): Promise<AppS
   });
 
   return parseResponse(response);
+}
+
+export async function reverseGeocodeLocation(
+  latitude: number,
+  longitude: number,
+): Promise<ReverseGeocodeResponse> {
+  if (!API_BASE_URL) {
+    throw new Error("EXPO_PUBLIC_API_BASE_URL is not configured.");
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/settings/reverse-geocode`, {
+    method: "POST",
+    headers: buildHeaders(),
+    body: JSON.stringify({ latitude, longitude }),
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as Partial<ReverseGeocodeResponse> & {
+    detail?: string;
+  };
+  if (!response.ok) {
+    throw new Error(payload.detail || `Request failed with status ${response.status}.`);
+  }
+
+  return {
+    label: payload.label ?? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+    latitude: payload.latitude ?? latitude,
+    longitude: payload.longitude ?? longitude,
+  };
 }

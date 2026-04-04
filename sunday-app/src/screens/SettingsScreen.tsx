@@ -11,6 +11,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  LocationPickerModal,
+  SelectedLocation,
+} from "../components/LocationPickerModal";
 import { FONTS } from "../constants/fonts";
 import {
   AppSettingsValues,
@@ -42,6 +46,37 @@ type SettingSection = {
   fields: SettingField[];
 };
 
+type LocationSettingGroup = {
+  id: "home" | "work";
+  title: string;
+  description: string;
+  locationKey: string;
+  latitudeKey: string;
+  longitudeKey: string;
+  placeholder: string;
+};
+
+const LOCATION_SETTING_GROUPS: LocationSettingGroup[] = [
+  {
+    id: "home",
+    title: "Home",
+    description: "Pin your default home point instead of typing coordinates.",
+    locationKey: "DEFAULT_HOME_LOCATION",
+    latitudeKey: "DEFAULT_HOME_LATITUDE",
+    longitudeKey: "DEFAULT_HOME_LONGITUDE",
+    placeholder: "Champaign, IL",
+  },
+  {
+    id: "work",
+    title: "Work",
+    description: "Pin your default work point instead of typing coordinates.",
+    locationKey: "DEFAULT_WORK_LOCATION",
+    latitudeKey: "DEFAULT_WORK_LATITUDE",
+    longitudeKey: "DEFAULT_WORK_LONGITUDE",
+    placeholder: "Office address",
+  },
+];
+
 const SETTINGS_SECTIONS: SettingSection[] = [
   {
     title: "Calendar",
@@ -71,33 +106,12 @@ const SETTINGS_SECTIONS: SettingSection[] = [
       {
         key: "DEFAULT_HOME_LOCATION",
         label: "Home location",
-        placeholder: "Champaign, IL",
         kind: "text",
-      },
-      {
-        key: "DEFAULT_HOME_LATITUDE",
-        label: "Home latitude",
-        kind: "decimal",
-      },
-      {
-        key: "DEFAULT_HOME_LONGITUDE",
-        label: "Home longitude",
-        kind: "decimal",
       },
       {
         key: "DEFAULT_WORK_LOCATION",
         label: "Work location",
         kind: "text",
-      },
-      {
-        key: "DEFAULT_WORK_LATITUDE",
-        label: "Work latitude",
-        kind: "decimal",
-      },
-      {
-        key: "DEFAULT_WORK_LONGITUDE",
-        label: "Work longitude",
-        kind: "decimal",
       },
     ],
   },
@@ -169,12 +183,50 @@ function getInitialSettingsState() {
       values[field.key] = field.kind === "boolean" ? false : "";
     }
   }
+  for (const group of LOCATION_SETTING_GROUPS) {
+    values[group.locationKey] = "";
+    values[group.latitudeKey] = "";
+    values[group.longitudeKey] = "";
+  }
   return values;
 }
 
 function serializeSettings(settings: AppSettingsValues) {
   const sortedKeys = Object.keys(settings).sort();
   return JSON.stringify(settings, sortedKeys);
+}
+
+function parseCoordinate(rawValue: string | boolean | undefined) {
+  if (typeof rawValue !== "string") {
+    return null;
+  }
+  const parsed = Number.parseFloat(rawValue.trim());
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
+function formatCoordinateLabel(latitude: number | null, longitude: number | null) {
+  if (latitude === null || longitude === null) {
+    return "No point selected yet.";
+  }
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+}
+
+function defaultPickerCoordinate(settings: AppSettingsValues) {
+  for (const group of LOCATION_SETTING_GROUPS) {
+    const latitude = parseCoordinate(settings[group.latitudeKey]);
+    const longitude = parseCoordinate(settings[group.longitudeKey]);
+    if (latitude !== null && longitude !== null) {
+      return { latitude, longitude };
+    }
+  }
+
+  return {
+    latitude: 40.110588,
+    longitude: -88.20727,
+  };
 }
 
 export function SettingsScreen() {
@@ -185,6 +237,7 @@ export function SettingsScreen() {
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
   const [warnings, setWarnings] = React.useState<string[]>([]);
   const [errors, setErrors] = React.useState<string[]>([]);
+  const [activeLocationGroupId, setActiveLocationGroupId] = React.useState<LocationSettingGroup["id"] | null>(null);
   const lastSavedSettingsRef = React.useRef("");
   const hasLoadedSettingsRef = React.useRef(false);
   const saveSequenceRef = React.useRef(0);
@@ -239,6 +292,19 @@ export function SettingsScreen() {
       [key]: value,
     }));
   }, []);
+
+  const handleLocationSelected = React.useCallback(
+    (group: LocationSettingGroup, selection: SelectedLocation) => {
+      setSettings((current) => ({
+        ...current,
+        [group.locationKey]: selection.label,
+        [group.latitudeKey]: selection.latitude.toFixed(6),
+        [group.longitudeKey]: selection.longitude.toFixed(6),
+      }));
+      setActiveLocationGroupId(null);
+    },
+    [],
+  );
 
   React.useEffect(() => {
     if (isLoading || !hasLoadedSettingsRef.current) {
@@ -296,6 +362,26 @@ export function SettingsScreen() {
     }, AUTOSAVE_DELAY_MS);
   }, [isLoading, settings]);
 
+  const activeLocationGroup = React.useMemo(
+    () =>
+      LOCATION_SETTING_GROUPS.find((group) => group.id === activeLocationGroupId) ?? null,
+    [activeLocationGroupId],
+  );
+
+  const activePickerCoordinate = React.useMemo(() => {
+    if (!activeLocationGroup) {
+      return defaultPickerCoordinate(settings);
+    }
+
+    const latitude = parseCoordinate(settings[activeLocationGroup.latitudeKey]);
+    const longitude = parseCoordinate(settings[activeLocationGroup.longitudeKey]);
+    if (latitude !== null && longitude !== null) {
+      return { latitude, longitude };
+    }
+
+    return defaultPickerCoordinate(settings);
+  }, [activeLocationGroup, settings]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" />
@@ -323,7 +409,55 @@ export function SettingsScreen() {
               <View key={section.title} style={styles.section}>
                 <Text style={styles.sectionTitle}>{section.title}</Text>
                 <View style={styles.sectionPanel}>
-                  {section.fields.map((field, index) => {
+                  {section.title === "Locations"
+                    ? LOCATION_SETTING_GROUPS.map((group, index) => {
+                        const locationValue = String(settings[group.locationKey] ?? "");
+                        const latitude = parseCoordinate(settings[group.latitudeKey]);
+                        const longitude = parseCoordinate(settings[group.longitudeKey]);
+
+                        return (
+                          <View
+                            key={group.id}
+                            style={[
+                              styles.fieldRow,
+                              index !== LOCATION_SETTING_GROUPS.length - 1 && styles.fieldRowBorder,
+                            ]}
+                          >
+                            <View style={styles.fieldHeader}>
+                              <Text style={styles.fieldLabel}>{group.title}</Text>
+                              <Text style={styles.fieldDescription}>{group.description}</Text>
+                            </View>
+
+                            <TextInput
+                              autoCapitalize="words"
+                              autoCorrect={false}
+                              onChangeText={(value) => handleTextChange(group.locationKey, value)}
+                              placeholder={group.placeholder}
+                              placeholderTextColor="#6f6f6f"
+                              style={styles.input}
+                              value={locationValue}
+                            />
+
+                            <View style={styles.locationRow}>
+                              <View style={styles.locationMeta}>
+                                <Text style={styles.locationMetaLabel}>Selected point</Text>
+                                <Text style={styles.locationMetaValue}>
+                                  {formatCoordinateLabel(latitude, longitude)}
+                                </Text>
+                              </View>
+                              <Pressable
+                                onPress={() => setActiveLocationGroupId(group.id)}
+                                style={styles.locationButton}
+                              >
+                                <Text style={styles.locationButtonText}>
+                                  {latitude !== null && longitude !== null ? "Adjust on map" : "Pick on map"}
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        );
+                      })
+                    : section.fields.map((field, index) => {
                     const rawValue = settings[field.key];
                     const stringValue = typeof rawValue === "boolean" ? "" : String(rawValue ?? "");
                     const boolValue = rawValue === true;
@@ -409,6 +543,17 @@ export function SettingsScreen() {
           </>
         )}
       </ScrollView>
+
+      {activeLocationGroup ? (
+        <LocationPickerModal
+          visible
+          title={`${activeLocationGroup.title} location`}
+          initialCoordinate={activePickerCoordinate}
+          initialLabel={String(settings[activeLocationGroup.locationKey] ?? "")}
+          onClose={() => setActiveLocationGroupId(null)}
+          onConfirm={(selection) => handleLocationSelected(activeLocationGroup, selection)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -494,6 +639,38 @@ const styles = StyleSheet.create({
     backgroundColor: PANEL_ALT,
     fontFamily: FONTS.regular,
     fontSize: 15,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  locationMeta: {
+    flex: 1,
+    gap: 4,
+  },
+  locationMetaLabel: {
+    color: MUTED,
+    fontFamily: FONTS.medium,
+    fontSize: 12,
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  locationMetaValue: {
+    color: "#ffffff",
+    fontFamily: FONTS.regular,
+    fontSize: 14,
+  },
+  locationButton: {
+    borderRadius: 999,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  locationButtonText: {
+    color: BACKGROUND,
+    fontFamily: FONTS.semibold,
+    fontSize: 14,
   },
   choiceRow: {
     flexDirection: "row",
