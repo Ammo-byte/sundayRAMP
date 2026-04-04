@@ -36,7 +36,6 @@ function NativeSettingsButton() {
 
 export function HomeScreen() {
   const orbScale = useRef(new Animated.Value(1)).current;
-  const isAnimating = useRef(false);
 
   const player = useVideoPlayer(ORB_VIDEO_URL, (videoPlayer) => {
     videoPlayer.loop = true;
@@ -45,29 +44,20 @@ export function HomeScreen() {
   });
 
   const animateOrb = useCallback(() => {
-    if (isAnimating.current) {
-      return;
-    }
-
-    isAnimating.current = true;
     orbScale.stopAnimation();
     orbScale.setValue(1);
 
-    Animated.sequence([
-      Animated.spring(orbScale, {
-        toValue: 1.08,
-        friction: 7,
-        tension: 220,
-        useNativeDriver: true,
-      }),
-      Animated.spring(orbScale, {
-        toValue: 1,
-        friction: 8,
-        tension: 210,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      isAnimating.current = false;
+    Animated.spring(orbScale, {
+      toValue: 1.055,
+      velocity: 4.2,
+      tension: 340,
+      friction: 11,
+      mass: 0.75,
+      overshootClamping: false,
+      restDisplacementThreshold: 0.001,
+      restSpeedThreshold: 0.001,
+      useNativeDriver: true,
+    }).start(() => {
       orbScale.setValue(1);
     });
   }, [orbScale]);
