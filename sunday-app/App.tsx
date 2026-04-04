@@ -150,15 +150,33 @@ function Main() {
     animateNavVisibility(!navVisible);
   }, [activeIndex, animateNavVisibility, navVisible]);
 
-  const handleTranscript = React.useCallback((transcript: string) => {
+  const handleTranscriptPending = React.useCallback(() => {
     const createdAt = new Date().toISOString();
+    const id = `${createdAt}-${Math.random().toString(36).slice(2, 8)}`;
     const entry: AlertEntry = {
-      id: `${createdAt}-${Math.random().toString(36).slice(2, 8)}`,
-      transcript,
-      summary: summarizeTranscript(transcript),
+      id,
+      transcript: "",
+      summary: "Transcription loading...",
       createdAt,
+      status: "pending",
     };
     setAlertEntries((current) => [entry, ...current]);
+    return id;
+  }, []);
+
+  const handleTranscript = React.useCallback((entryId: string, transcript: string) => {
+    setAlertEntries((current) =>
+      current.map((entry) =>
+        entry.id === entryId
+          ? {
+              ...entry,
+              transcript,
+              summary: summarizeTranscript(transcript),
+              status: "complete",
+            }
+          : entry,
+      ),
+    );
   }, []);
 
   React.useEffect(() => {
@@ -198,6 +216,7 @@ function Main() {
         <View style={styles.page}>
           <HomeScreen
             onBackgroundPress={handleRecordBackgroundPress}
+            onTranscriptPending={handleTranscriptPending}
             onTranscript={handleTranscript}
           />
         </View>

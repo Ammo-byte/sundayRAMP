@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
   StatusBar,
@@ -20,6 +21,7 @@ export type AlertEntry = {
   summary: string;
   transcript: string;
   createdAt: string;
+  status: "pending" | "complete";
 };
 
 type AlertsScreenProps = {
@@ -53,12 +55,24 @@ export function AlertsScreen({ entries }: AlertsScreenProps) {
         data={entries}
         keyExtractor={(item) => item.id}
         contentContainerStyle={entries.length ? styles.listContent : styles.emptyContent}
+        scrollEnabled
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={renderEmptyState}
         renderItem={({ item }) => (
           <Pressable style={styles.card}>
-            <View style={styles.cardText}>
-              <Text style={styles.summary}>{item.summary}</Text>
+            <View style={styles.cardMain}>
+              {item.status === "pending" ? (
+                <ActivityIndicator
+                  size="small"
+                  color="#ffffff"
+                  style={styles.loadingSpinner}
+                />
+              ) : null}
+              <View style={styles.cardText}>
+                <Text style={styles.summary}>
+                  {item.status === "pending" ? "Transcription loading..." : item.summary}
+                </Text>
+              </View>
             </View>
             <Text style={styles.timestamp}>{formatTimestamp(item.createdAt)}</Text>
           </Pressable>
@@ -82,7 +96,6 @@ const styles = StyleSheet.create({
   emptyContent: {
     flexGrow: 1,
     paddingHorizontal: 28,
-    paddingBottom: 120,
   },
   emptyState: {
     flex: 1,
@@ -115,9 +128,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  cardMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 16,
+  },
+  loadingSpinner: {
+    marginRight: 12,
+  },
   cardText: {
     flex: 1,
-    paddingRight: 16,
   },
   summary: {
     color: "#ffffff",

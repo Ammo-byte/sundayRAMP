@@ -23,10 +23,11 @@ const RECORDING = "#eb4034";
 
 type HomeScreenProps = {
   onBackgroundPress?: () => void;
-  onTranscript?: (transcript: string) => void;
+  onTranscriptPending?: () => string;
+  onTranscript?: (entryId: string, transcript: string) => void;
 };
 
-export function HomeScreen({ onBackgroundPress, onTranscript }: HomeScreenProps) {
+export function HomeScreen({ onBackgroundPress, onTranscriptPending, onTranscript }: HomeScreenProps) {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 200);
   const [isTogglingRecording, setIsTogglingRecording] = React.useState(false);
@@ -56,12 +57,12 @@ export function HomeScreen({ onBackgroundPress, onTranscript }: HomeScreenProps)
     });
   }, [scale]);
 
-  const transcribeRecording = React.useCallback(async (recordingUrl: string) => {
+  const transcribeRecording = React.useCallback(async (entryId: string, recordingUrl: string) => {
     try {
       console.log("[sunday] uploading recording for transcription");
       const transcript = await uploadRecordingForTranscription(recordingUrl);
       console.log("[sunday] transcript:", transcript);
-      onTranscript?.(transcript);
+      onTranscript?.(entryId, transcript);
     } catch (error) {
       console.error("[sunday] transcription failed", error);
     }
@@ -101,13 +102,18 @@ export function HomeScreen({ onBackgroundPress, onTranscript }: HomeScreenProps)
       }
 
       console.log("[sunday] recording stopped");
-      void transcribeRecording(recordingUrl);
+      const entryId = onTranscriptPending?.();
+      if (entryId) {
+        void transcribeRecording(entryId, recordingUrl);
+      } else {
+        void transcribeRecording(`${Date.now()}`, recordingUrl);
+      }
     } catch (error) {
       console.error("[sunday] failed to stop recording", error);
     } finally {
       setIsTogglingRecording(false);
     }
-  }, [recorder, recorderState.url, transcribeRecording]);
+  }, [onTranscriptPending, recorder, recorderState.url, transcribeRecording]);
 
   const handleDotPress = React.useCallback(async (event?: GestureResponderEvent) => {
     event?.stopPropagation?.();
