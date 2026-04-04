@@ -5,6 +5,7 @@ import DateTimePicker, {
 import { Picker } from "@react-native-picker/picker";
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -367,6 +368,8 @@ export function SettingsScreen() {
   const [warnings, setWarnings] = React.useState<string[]>([]);
   const [errors, setErrors] = React.useState<string[]>([]);
   const [activeLocationGroupId, setActiveLocationGroupId] = React.useState<LocationSettingGroup["id"] | null>(null);
+  const [isTimezonePickerVisible, setIsTimezonePickerVisible] = React.useState(false);
+  const [pendingTimezone, setPendingTimezone] = React.useState("");
   const lastSavedSettingsRef = React.useRef("");
   const hasLoadedSettingsRef = React.useRef(false);
   const saveSequenceRef = React.useRef(0);
@@ -481,6 +484,20 @@ export function SettingsScreen() {
       [key]: value,
     }));
   }, []);
+
+  const openTimezonePicker = React.useCallback(() => {
+    setPendingTimezone(String(settings.TIMEZONE ?? "") || "America/Chicago");
+    setIsTimezonePickerVisible(true);
+  }, [settings.TIMEZONE]);
+
+  const closeTimezonePicker = React.useCallback(() => {
+    setIsTimezonePickerVisible(false);
+  }, []);
+
+  const confirmTimezonePicker = React.useCallback(() => {
+    handleTextChange("TIMEZONE", pendingTimezone || "America/Chicago");
+    setIsTimezonePickerVisible(false);
+  }, [handleTextChange, pendingTimezone]);
 
   const handlePhoneLocationToggle = React.useCallback(async (nextValue: boolean) => {
     setErrorMessage(null);
@@ -819,23 +836,12 @@ export function SettingsScreen() {
                             })}
                           </View>
                         ) : field.key === "TIMEZONE" ? (
-                          <View style={styles.nativePickerField}>
-                            <Picker
-                              selectedValue={stringValue || "America/Chicago"}
-                              onValueChange={(value) => handleTextChange(field.key, String(value))}
-                              itemStyle={styles.nativePickerItem}
-                              style={styles.timezonePicker}
-                            >
-                              {timeZoneOptions.map((option) => (
-                                <Picker.Item
-                                  key={option}
-                                  label={option}
-                                  value={option}
-                                  color="#ffffff"
-                                />
-                              ))}
-                            </Picker>
-                          </View>
+                          <Pressable onPress={openTimezonePicker} style={styles.selectTrigger}>
+                            <Text numberOfLines={1} style={styles.selectTriggerText}>
+                              {stringValue || field.placeholder || "Select"}
+                            </Text>
+                            <Text style={styles.selectTriggerChevron}>▾</Text>
+                          </Pressable>
                         ) : isNumericPickerKey(field.key) ? (
                           (() => {
                             const numericKey = field.key;
@@ -898,6 +904,47 @@ export function SettingsScreen() {
           onClose={() => setActiveLocationGroupId(null)}
           onConfirm={(selection) => handleLocationSelected(activeLocationGroup, selection)}
         />
+      ) : null}
+
+      {isTimezonePickerVisible ? (
+        <Modal
+          transparent
+          animationType="slide"
+          visible
+          onRequestClose={closeTimezonePicker}
+        >
+          <View style={styles.sheetOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeTimezonePicker} />
+            <View style={[styles.sheetPanel, { paddingBottom: insets.bottom + 14 }]}>
+              <View style={styles.sheetHeader}>
+                <Pressable hitSlop={10} onPress={closeTimezonePicker}>
+                  <Text style={styles.sheetActionText}>Cancel</Text>
+                </Pressable>
+                <Text style={styles.sheetTitle}>Time Zone</Text>
+                <Pressable hitSlop={10} onPress={confirmTimezonePicker}>
+                  <Text style={styles.sheetActionText}>Done</Text>
+                </Pressable>
+              </View>
+              <View style={styles.sheetPickerWrap}>
+                <Picker
+                  selectedValue={pendingTimezone}
+                  onValueChange={(value) => setPendingTimezone(String(value))}
+                  itemStyle={styles.sheetPickerItem}
+                  style={styles.sheetPicker}
+                >
+                  {timeZoneOptions.map((option) => (
+                    <Picker.Item
+                      key={option}
+                      label={option}
+                      value={option}
+                      color="#ffffff"
+                    />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+          </View>
+        </Modal>
       ) : null}
     </SafeAreaView>
   );
@@ -1032,6 +1079,29 @@ const styles = StyleSheet.create({
     height: 180,
     marginHorizontal: Platform.OS === "ios" ? -8 : 0,
   },
+  selectTrigger: {
+    minHeight: 44,
+    maxWidth: 200,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    backgroundColor: PANEL_ALT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  selectTriggerText: {
+    flex: 1,
+    color: "#ffffff",
+    fontFamily: FONTS.regular,
+    fontSize: 15,
+    textAlign: "right",
+  },
+  selectTriggerChevron: {
+    color: MUTED,
+    fontFamily: FONTS.semibold,
+    fontSize: 16,
+  },
   numericInput: {
     width: 76,
     minHeight: 46,
@@ -1111,5 +1181,47 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     fontSize: 13,
     lineHeight: 18,
+  },
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+  },
+  sheetPanel: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    backgroundColor: "#1d1d1f",
+    overflow: "hidden",
+  },
+  sheetHeader: {
+    minHeight: 52,
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+  sheetTitle: {
+    color: "#ffffff",
+    fontFamily: FONTS.semibold,
+    fontSize: 16,
+  },
+  sheetActionText: {
+    color: "#0a84ff",
+    fontFamily: FONTS.medium,
+    fontSize: 16,
+  },
+  sheetPickerWrap: {
+    backgroundColor: "#1d1d1f",
+  },
+  sheetPicker: {
+    height: 216,
+    color: "#ffffff",
+  },
+  sheetPickerItem: {
+    color: "#ffffff",
+    fontFamily: FONTS.regular,
+    fontSize: 20,
   },
 });
