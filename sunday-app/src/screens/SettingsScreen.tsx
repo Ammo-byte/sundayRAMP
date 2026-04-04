@@ -792,6 +792,7 @@ export function SettingsScreen() {
                             style={[
                               styles.fieldRow,
                               styles.fieldRowInline,
+                              styles.locationFieldRow,
                               styles.fieldRowBorder,
                             ]}
                           >
@@ -1134,6 +1135,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  locationFieldRow: {
+    paddingLeft: 12,
+    paddingRight: 14,
+  },
   fieldRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
@@ -1172,15 +1177,15 @@ const styles = StyleSheet.create({
   },
   locationFieldHeader: {
     flex: 0,
-    width: 32,
-    height: 32,
+    width: 24,
+    height: 24,
     paddingRight: 0,
     alignItems: "center",
     justifyContent: "center",
   },
   locationIconWrap: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1189,7 +1194,7 @@ const styles = StyleSheet.create({
     minHeight: 34,
     borderRadius: 999,
     backgroundColor: PANEL_ALT,
-    marginLeft: 8,
+    marginLeft: 6,
     paddingHorizontal: 12,
     paddingVertical: 7,
     justifyContent: "center",
