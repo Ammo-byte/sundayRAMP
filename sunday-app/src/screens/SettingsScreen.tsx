@@ -1803,6 +1803,43 @@ export function SettingsScreen({ onSegmentInteractionChange }: SettingsScreenPro
                 />
               </View>
 
+              {connectedAgent === "OpenClaw" && (
+                <>
+                  <View style={[styles.fieldRow, styles.fieldRowInline, styles.fieldRowBorder]}>
+                    <View style={[styles.fieldHeader, styles.fieldHeaderInline]}>
+                      <Text numberOfLines={1} style={styles.fieldLabel}>
+                        Hook token
+                      </Text>
+                    </View>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardAppearance="dark"
+                      onChangeText={(value) => handleTextChange("OPENCLAW_TOKEN", value)}
+                      onFocus={(event) => handleTextInputFocus(event.nativeEvent.target)}
+                      placeholder="your-hook-token"
+                      placeholderTextColor="#6f6f6f"
+                      secureTextEntry
+                      style={[styles.input, styles.connectionInput]}
+                      value={String(settings["OPENCLAW_TOKEN"] ?? "")}
+                    />
+                  </View>
+                  <View style={[styles.fieldRow, styles.fieldRowInline, styles.fieldRowBorder]}>
+                    <View style={[styles.fieldHeader, styles.fieldHeaderInline]}>
+                      <Text numberOfLines={1} style={styles.fieldLabel}>
+                        Enabled
+                      </Text>
+                    </View>
+                    <Switch
+                      onValueChange={(value) => handleTextChange("OPENCLAW_ENABLED", String(value))}
+                      thumbColor={ACCENT}
+                      trackColor={{ false: TOGGLE_OFF, true: TOGGLE_ON }}
+                      value={settings["OPENCLAW_ENABLED"] === true || settings["OPENCLAW_ENABLED"] === "true"}
+                    />
+                  </View>
+                </>
+              )}
+
               <View style={styles.fieldRow}>
                 <View style={styles.fieldHeader}>
                   <Text numberOfLines={1} style={styles.fieldLabel}>

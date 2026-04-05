@@ -178,6 +178,12 @@ Rules:
 - For online meetings with no physical location, set location to null and is_online to true.
 - If an address is partial (e.g. "Siebel 2124"), expand it to a full address if you know it;
   otherwise keep it as-is.
+- Marketing emails, newsletters, sales promotions, automated job alerts (LinkedIn, Indeed, etc.),
+  subscription digests, and any bulk/automated sender must have urgency="none", can_wait=true,
+  and action_items=[]. Do not generate action items like "apply to job" or "check out sale" for
+  these — they are not actionable tasks.
+- Only set needs_response=true for emails from a real human that genuinely require a reply.
+- Only populate action_items for concrete tasks a human personally asked the user to do.
 """
 
 
