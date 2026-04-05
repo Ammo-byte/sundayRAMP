@@ -2,6 +2,7 @@ import React from "react";
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Easing,
   FlatList,
   Modal,
@@ -27,6 +28,7 @@ const EMPTY = "#8b8b8b";
 const DELETE = "#eb4034";
 const DETAIL_TRACK = "#2b2b2b";
 const DETAIL_PANEL = "#1b1b1b";
+const DELETE_EXIT_OFFSET = Dimensions.get("window").width + 80;
 
 type AlertsScreenProps = {
   entries: AlertEntry[];
@@ -369,6 +371,9 @@ function EntryDetailModal({ entry, onClose }: EntryDetailModalProps) {
 
 function AlertRow({ item, onOpenEntry, onDeleteEntry }: AlertRowProps) {
   const closeBounceX = React.useRef(new Animated.Value(0)).current;
+  const deleteTranslateX = React.useRef(new Animated.Value(0)).current;
+  const deleteOpacity = React.useRef(new Animated.Value(1)).current;
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const handleSwipeableWillClose = React.useCallback(() => {
     closeBounceX.stopAnimation();
@@ -387,6 +392,39 @@ function AlertRow({ item, onOpenEntry, onDeleteEntry }: AlertRowProps) {
       }),
     ]).start();
   }, [closeBounceX]);
+
+  const handleDeletePress = React.useCallback(() => {
+    if (isDeleting) {
+      return;
+    }
+
+    setIsDeleting(true);
+    deleteTranslateX.stopAnimation();
+    deleteOpacity.stopAnimation();
+
+    Animated.parallel([
+      Animated.timing(deleteTranslateX, {
+        toValue: -DELETE_EXIT_OFFSET,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(deleteOpacity, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        onDeleteEntry?.(item.id);
+      } else {
+        setIsDeleting(false);
+        deleteTranslateX.setValue(0);
+        deleteOpacity.setValue(1);
+      }
+    });
+  }, [deleteOpacity, deleteTranslateX, isDeleting, item.id, onDeleteEntry]);
 
   const renderRightActions = React.useCallback(
     (
@@ -416,29 +454,39 @@ function AlertRow({ item, onOpenEntry, onDeleteEntry }: AlertRowProps) {
             { opacity, transform: [{ translateX }, { scale }] },
           ]}
         >
-          <Pressable onPress={() => onDeleteEntry?.(item.id)} style={styles.deleteAction}>
+          <Pressable onPress={handleDeletePress} style={styles.deleteAction}>
             <TrashIcon />
           </Pressable>
         </Animated.View>
       );
     },
-    [item.id, onDeleteEntry],
+    [handleDeletePress],
   );
 
   return (
     <View style={styles.rowWrap}>
-      <Animated.View style={{ transform: [{ translateX: closeBounceX }] }}>
+      <Animated.View
+        style={{
+          opacity: deleteOpacity,
+          transform: [{ translateX: Animated.add(closeBounceX, deleteTranslateX) }],
+        }}
+      >
         <Swipeable
           friction={1.25}
           overshootRight
           overshootFriction={6}
           rightThreshold={30}
+          enabled={!isDeleting}
           containerStyle={styles.swipeableContainer}
           childrenContainerStyle={styles.swipeableChildren}
           onSwipeableWillClose={handleSwipeableWillClose}
           renderRightActions={renderRightActions}
         >
-          <Pressable onPress={() => onOpenEntry?.(item.id)} style={styles.card}>
+          <Pressable
+            disabled={isDeleting}
+            onPress={() => onOpenEntry?.(item.id)}
+            style={styles.card}
+          >
             <View style={styles.cardMain}>
               {item.status === "pending" ? (
                 <View style={styles.loadingSpinnerWrap}>
@@ -671,7 +719,7 @@ const styles = StyleSheet.create({
   detailBottomPanel: {
     marginTop: "auto",
     marginHorizontal: -20,
-    paddingTop: 26,
+    paddingTop: 18,
     paddingHorizontal: 18,
     backgroundColor: DETAIL_PANEL,
     borderTopLeftRadius: 28,
@@ -684,6 +732,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
+    marginBottom: 8,
   },
   detailPlayButton: {
     width: 40,

@@ -4,9 +4,12 @@ import {
   Animated,
   Dimensions,
   Keyboard,
+  LayoutAnimation,
   Pressable,
+  Platform,
   ScrollView,
   StyleSheet,
+  UIManager,
   View,
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -139,6 +142,12 @@ function Main() {
   );
   const navHiddenOffset = NAV_HEIGHT + Math.max(insets.bottom, 14) + 18;
 
+  React.useEffect(() => {
+    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
   const animateNavVisibility = React.useCallback(
     (visible: boolean) => {
       const target = visible ? 0 : navHiddenOffset;
@@ -248,6 +257,22 @@ function Main() {
   }, []);
 
   const handleDeleteAlert = React.useCallback((entryId: string) => {
+    LayoutAnimation.configureNext({
+      duration: 260,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.spring,
+        springDamping: 0.82,
+      },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
+
     setAlertEntries((current) => {
       const entryToDelete = current.find((entry) => entry.id === entryId);
       if (entryToDelete?.audioUri) {

@@ -24,6 +24,7 @@ import {
   LocationPickerModal,
   SelectedLocation,
 } from "../components/LocationPickerModal";
+import { TextSegmentedSelector } from "../components/TextSegmentedSelector";
 import { TravelTypeSelector } from "../components/TravelTypeSelector";
 import { FONTS } from "../constants/fonts";
 import {
@@ -99,6 +100,14 @@ const WORKDAY_OPTIONS = [
   { label: "F", value: "fri" },
   { label: "Sa", value: "sat" },
 ] as const;
+const CONNECTED_AGENT_OPTIONS = [
+  "OpenAI",
+  "Anthropic",
+  "Gemini",
+  "Ollama",
+  "OpenClaw",
+] as const;
+const BACKEND_OPTIONS = ["Self-hosted", "Vercel"] as const;
 type FieldKind = "text" | "number" | "decimal" | "boolean" | "choice" | "select";
 
 type SettingField = {
@@ -417,6 +426,8 @@ export function SettingsScreen() {
   const [isEditingCalendarId, setIsEditingCalendarId] = React.useState(false);
   const [calendarDisplayWidth, setCalendarDisplayWidth] = React.useState(0);
   const [pendingTimezone, setPendingTimezone] = React.useState("");
+  const [connectedAgent, setConnectedAgent] = React.useState("Ollama");
+  const [backendTarget, setBackendTarget] = React.useState("Self-hosted");
   const lastSavedSettingsRef = React.useRef("");
   const hasLoadedSettingsRef = React.useRef(false);
   const saveSequenceRef = React.useRef(0);
@@ -1150,6 +1161,37 @@ export function SettingsScreen() {
               </View>
             </View>
           ))}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Connection</Text>
+            <View style={styles.sectionPanel}>
+              <View style={[styles.fieldRow, styles.fieldRowBorder]}>
+                <View style={styles.fieldHeader}>
+                  <Text numberOfLines={1} style={styles.fieldLabel}>
+                    Connected agent
+                  </Text>
+                </View>
+                <TextSegmentedSelector
+                  options={CONNECTED_AGENT_OPTIONS}
+                  value={connectedAgent}
+                  onChange={setConnectedAgent}
+                />
+              </View>
+
+              <View style={styles.fieldRow}>
+                <View style={styles.fieldHeader}>
+                  <Text numberOfLines={1} style={styles.fieldLabel}>
+                    Backend
+                  </Text>
+                </View>
+                <TextSegmentedSelector
+                  options={BACKEND_OPTIONS}
+                  value={backendTarget}
+                  onChange={setBackendTarget}
+                />
+              </View>
+            </View>
+          </View>
 
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
           {errors.map((error) => (
