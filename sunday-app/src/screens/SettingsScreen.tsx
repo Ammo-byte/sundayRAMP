@@ -415,6 +415,7 @@ export function SettingsScreen() {
   const [isTimezonePickerVisible, setIsTimezonePickerVisible] = React.useState(false);
   const [isTimezonePickerMounted, setIsTimezonePickerMounted] = React.useState(false);
   const [isEditingCalendarId, setIsEditingCalendarId] = React.useState(false);
+  const [calendarDisplayWidth, setCalendarDisplayWidth] = React.useState(0);
   const [pendingTimezone, setPendingTimezone] = React.useState("");
   const lastSavedSettingsRef = React.useRef("");
   const hasLoadedSettingsRef = React.useRef(false);
@@ -732,11 +733,15 @@ export function SettingsScreen() {
   const headerTopInset = insets.top + 8;
   const timezoneSheetHiddenY = Math.max(windowHeight, 420);
   const calendarFieldExpandedWidth = Math.min(262, Math.max(196, windowWidth * 0.52));
+  const calendarFieldCollapsedWidth = Math.min(
+    220,
+    Math.max(72, Math.ceil(calendarDisplayWidth + 16)),
+  );
   const calendarFieldAnimatedStyle = React.useMemo(
     () => ({
       width: calendarEditorProgress.interpolate({
         inputRange: [0, 1],
-        outputRange: [164, calendarFieldExpandedWidth],
+        outputRange: [calendarFieldCollapsedWidth, calendarFieldExpandedWidth],
       }),
       transform: [
         {
@@ -747,7 +752,7 @@ export function SettingsScreen() {
         },
       ],
     }),
-    [calendarEditorProgress, calendarFieldExpandedWidth],
+    [calendarEditorProgress, calendarFieldCollapsedWidth, calendarFieldExpandedWidth],
   );
 
   const activePickerCoordinate = React.useMemo(() => {
@@ -1056,6 +1061,15 @@ export function SettingsScreen() {
                           <Animated.View
                             style={[styles.calendarFieldAnimatedWrap, calendarFieldAnimatedStyle]}
                           >
+                            <Text
+                              onLayout={(event) => setCalendarDisplayWidth(event.nativeEvent.layout.width)}
+                              style={[
+                                styles.calendarMeasureText,
+                                styles.selectTriggerText,
+                              ]}
+                            >
+                              {targetCalendarDisplayValue}
+                            </Text>
                             {isEditingCalendarId ? (
                               <TextInput
                                 ref={calendarIdInputRef}
@@ -1079,7 +1093,10 @@ export function SettingsScreen() {
                                 onPress={openCalendarIdEditor}
                                 style={[styles.selectTrigger, styles.calendarSelectTrigger]}
                               >
-                                <Text numberOfLines={1} style={styles.selectTriggerText}>
+                                <Text
+                                  numberOfLines={1}
+                                  style={[styles.selectTriggerText, styles.calendarSelectTriggerText]}
+                                >
                                   {targetCalendarDisplayValue}
                                 </Text>
                               </Pressable>
@@ -1385,9 +1402,21 @@ const styles = StyleSheet.create({
   calendarSelectTrigger: {
     width: "100%",
     maxWidth: "100%",
+    justifyContent: "flex-end",
+    paddingLeft: 8,
+    paddingRight: 8,
   },
   calendarFieldAnimatedWrap: {
     alignSelf: "flex-end",
+  },
+  calendarMeasureText: {
+    position: "absolute",
+    opacity: 0,
+    left: -9999,
+    color: "#ffffff",
+    fontFamily: FONTS.regular,
+    fontSize: 14,
+    textAlign: "right",
   },
   calendarIdInput: {
     width: "100%",
@@ -1402,6 +1431,10 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     fontSize: 14,
     textAlign: "left",
+  },
+  calendarSelectTriggerText: {
+    width: "100%",
+    textAlign: "right",
   },
   numericInput: {
     width: 66,
