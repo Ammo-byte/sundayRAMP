@@ -174,13 +174,13 @@ const SETTINGS_SECTIONS: SettingSection[] = [
     fields: [
       {
         key: "TARGET_CALENDAR_ID",
-        label: "Target calendar ID",
+        label: "Google Calendar ID",
         placeholder: "primary",
         kind: "text",
       },
       {
         key: "TIMEZONE",
-        label: "Time zone",
+        label: "Time Zone",
         description: "Choose a valid IANA time zone.",
         placeholder: "America/Chicago",
         kind: "select",
@@ -219,14 +219,14 @@ const SETTINGS_SECTIONS: SettingSection[] = [
       },
       {
         key: "WORKDAY_START_TIME",
-        label: "Workday start",
+        label: "Workday Start",
         description: "Use 12-hour time like 9:00 AM",
         placeholder: "9:00 AM",
         kind: "text",
       },
       {
         key: "WORKDAY_END_TIME",
-        label: "Workday end",
+        label: "Workday End",
         description: "Use 12-hour time like 5:00 PM",
         placeholder: "5:00 PM",
         kind: "text",
@@ -239,22 +239,22 @@ const SETTINGS_SECTIONS: SettingSection[] = [
       },
       {
         key: "PREP_TIME_MINUTES",
-        label: "Prep minutes",
+        label: "Minutes between in-person events",
         kind: "number",
       },
       {
         key: "ONLINE_PREP_MINUTES",
-        label: "Online prep minutes",
+        label: "Minutes between online events",
         kind: "number",
       },
       {
         key: "POLL_INTERVAL_SECONDS",
-        label: "Poll interval seconds",
+        label: "Inbox polling interval duration",
         kind: "number",
       },
       {
         key: "MAX_EMAILS_PER_CYCLE",
-        label: "Max emails per cycle",
+        label: "Maximum emails per cycle",
         kind: "number",
       },
     ],
@@ -399,8 +399,9 @@ function formatTimeForBackend(date: Date) {
 
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const scrollViewRef = React.useRef<ScrollView>(null);
+  const calendarIdInputRef = React.useRef<TextInput>(null);
   const [settings, setSettings] = React.useState<AppSettingsValues>(getInitialSettingsState);
   const [settingsMetadata, setSettingsMetadata] = React.useState<Record<string, string>>({});
   const [isPhoneLocationEnabled, setIsPhoneLocationEnabled] = React.useState(false);
@@ -413,6 +414,7 @@ export function SettingsScreen() {
   const [activeLocationGroupId, setActiveLocationGroupId] = React.useState<LocationSettingGroup["id"] | null>(null);
   const [isTimezonePickerVisible, setIsTimezonePickerVisible] = React.useState(false);
   const [isTimezonePickerMounted, setIsTimezonePickerMounted] = React.useState(false);
+  const [isEditingCalendarId, setIsEditingCalendarId] = React.useState(false);
   const [pendingTimezone, setPendingTimezone] = React.useState("");
   const lastSavedSettingsRef = React.useRef("");
   const hasLoadedSettingsRef = React.useRef(false);
@@ -422,6 +424,7 @@ export function SettingsScreen() {
   const retryTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const timezoneBackdropOpacity = React.useRef(new Animated.Value(0)).current;
   const timezoneSheetTranslateY = React.useRef(new Animated.Value(28)).current;
+  const calendarEditorProgress = React.useRef(new Animated.Value(0)).current;
 
   const loadSettings = React.useCallback(async () => {
     try {
@@ -511,6 +514,21 @@ export function SettingsScreen() {
     }));
   }, []);
 
+  const handleCalendarIdChange = React.useCallback((value: string) => {
+    setSettings((current) => ({
+      ...current,
+      TARGET_CALENDAR_ID: value,
+    }));
+    setSettingsMetadata((current) => {
+      if (!current.target_calendar_label) {
+        return current;
+      }
+
+      const { target_calendar_label: _, ...rest } = current;
+      return rest;
+    });
+  }, []);
+
   const handleTextInputFocus = React.useCallback(
     (target: number) => {
       setTimeout(() => {
@@ -556,6 +574,14 @@ export function SettingsScreen() {
     setPendingTimezone(String(settings.TIMEZONE ?? "") || "America/Chicago");
     setIsTimezonePickerVisible(true);
   }, [settings.TIMEZONE]);
+
+  const openCalendarIdEditor = React.useCallback(() => {
+    setIsEditingCalendarId(true);
+  }, []);
+
+  const closeCalendarIdEditor = React.useCallback(() => {
+    setIsEditingCalendarId(false);
+  }, []);
 
   const closeTimezonePicker = React.useCallback(() => {
     setIsTimezonePickerVisible(false);
@@ -705,6 +731,24 @@ export function SettingsScreen() {
     "Primary";
   const headerTopInset = insets.top + 8;
   const timezoneSheetHiddenY = Math.max(windowHeight, 420);
+  const calendarFieldExpandedWidth = Math.min(262, Math.max(196, windowWidth * 0.52));
+  const calendarFieldAnimatedStyle = React.useMemo(
+    () => ({
+      width: calendarEditorProgress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [164, calendarFieldExpandedWidth],
+      }),
+      transform: [
+        {
+          translateX: calendarEditorProgress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, -10],
+          }),
+        },
+      ],
+    }),
+    [calendarEditorProgress, calendarFieldExpandedWidth],
+  );
 
   const activePickerCoordinate = React.useMemo(() => {
     if (!activeLocationGroup) {
@@ -779,6 +823,27 @@ export function SettingsScreen() {
     timezoneSheetHiddenY,
     timezoneSheetTranslateY,
   ]);
+
+  React.useEffect(() => {
+    if (!isEditingCalendarId) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      calendarIdInputRef.current?.focus();
+    }, 40);
+
+    return () => clearTimeout(timeout);
+  }, [isEditingCalendarId]);
+
+  React.useEffect(() => {
+    Animated.spring(calendarEditorProgress, {
+      toValue: isEditingCalendarId ? 1 : 0,
+      speed: 22,
+      bounciness: 8,
+      useNativeDriver: false,
+    }).start();
+  }, [calendarEditorProgress, isEditingCalendarId]);
 
   if (isLoading) {
     return (
@@ -902,7 +967,9 @@ export function SettingsScreen() {
                               styles.fieldHeaderInline,
                           ]}
                         >
-                          <Text style={styles.fieldLabel}>{field.label}</Text>
+                          <Text numberOfLines={1} style={styles.fieldLabel}>
+                            {field.label}
+                          </Text>
                         </View>
 
                         {field.kind === "boolean" ? (
@@ -986,11 +1053,38 @@ export function SettingsScreen() {
                             })}
                           </View>
                         ) : field.key === "TARGET_CALENDAR_ID" ? (
-                          <View style={styles.selectTrigger}>
-                            <Text numberOfLines={1} style={styles.selectTriggerText}>
-                              {targetCalendarDisplayValue}
-                            </Text>
-                          </View>
+                          <Animated.View
+                            style={[styles.calendarFieldAnimatedWrap, calendarFieldAnimatedStyle]}
+                          >
+                            {isEditingCalendarId ? (
+                              <TextInput
+                                ref={calendarIdInputRef}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                keyboardAppearance="dark"
+                                multiline={false}
+                                numberOfLines={1}
+                                onBlur={closeCalendarIdEditor}
+                                onChangeText={handleCalendarIdChange}
+                                onFocus={(event) => handleTextInputFocus(event.nativeEvent.target)}
+                                onSubmitEditing={closeCalendarIdEditor}
+                                placeholder={field.placeholder}
+                                placeholderTextColor="#6f6f6f"
+                                selectTextOnFocus
+                                style={[styles.input, styles.calendarIdInput]}
+                                value={stringValue}
+                              />
+                            ) : (
+                              <Pressable
+                                onPress={openCalendarIdEditor}
+                                style={[styles.selectTrigger, styles.calendarSelectTrigger]}
+                              >
+                                <Text numberOfLines={1} style={styles.selectTriggerText}>
+                                  {targetCalendarDisplayValue}
+                                </Text>
+                              </Pressable>
+                            )}
+                          </Animated.View>
                         ) : field.key === "TIMEZONE" ? (
                           <Pressable onPress={openTimezonePicker} style={styles.selectTrigger}>
                             <Text numberOfLines={1} style={styles.selectTriggerText}>
@@ -1287,6 +1381,20 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     alignSelf: "flex-end",
     gap: 8,
+  },
+  calendarSelectTrigger: {
+    width: "100%",
+    maxWidth: "100%",
+  },
+  calendarFieldAnimatedWrap: {
+    alignSelf: "flex-end",
+  },
+  calendarIdInput: {
+    width: "100%",
+    height: 38,
+    minHeight: 0,
+    paddingVertical: 0,
+    textAlign: "left",
   },
   selectTriggerText: {
     flexShrink: 1,

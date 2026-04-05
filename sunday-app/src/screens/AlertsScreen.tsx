@@ -2,14 +2,18 @@ import React from "react";
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   FlatList,
+  Modal,
   Pressable,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { File } from "expo-file-system";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
@@ -20,6 +24,7 @@ const BACKGROUND = "#121212";
 const CARD = "#242424";
 const EMPTY = "#8b8b8b";
 const DELETE = "#eb4034";
+const DETAIL_TRACK = "#2b2b2b";
 
 type AlertsScreenProps = {
   entries: AlertEntry[];
@@ -28,9 +33,13 @@ type AlertsScreenProps = {
 
 type AlertRowProps = {
   item: AlertEntry;
-  isActive: boolean;
-  onPlaybackChange?: (entryId: string | null) => void;
+  onOpenEntry?: (entryId: string) => void;
   onDeleteEntry?: (entryId: string) => void;
+};
+
+type EntryDetailModalProps = {
+  entry: AlertEntry;
+  onClose: () => void;
 };
 
 function TrashIcon({ size = 20, color = "#ffffff" }: { size?: number; color?: string }) {
@@ -44,7 +53,7 @@ function TrashIcon({ size = 20, color = "#ffffff" }: { size?: number; color?: st
   );
 }
 
-function PlayCircleIcon({ size = 24, color = "#e3e3e3" }: { size?: number; color?: string }) {
+function PlayCircleIcon({ size = 28, color = "#e3e3e3" }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
       <Path
@@ -55,7 +64,7 @@ function PlayCircleIcon({ size = 24, color = "#e3e3e3" }: { size?: number; color
   );
 }
 
-function PauseCircleIcon({ size = 24, color = "#e3e3e3" }: { size?: number; color?: string }) {
+function PauseCircleIcon({ size = 28, color = "#e3e3e3" }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
       <Path
@@ -78,22 +87,199 @@ function renderEmptyState() {
   return (
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>No transcriptions yet</Text>
-      <Text style={styles.emptyBody}>
-        Recorded notes will show up here.
-      </Text>
+      <Text style={styles.emptyBody}>Recorded notes will show up here.</Text>
     </View>
   );
 }
 
-function AlertRow({ item, isActive, onPlaybackChange, onDeleteEntry }: AlertRowProps) {
-  const closeBounceX = React.useRef(new Animated.Value(0)).current;
-  const player = useAudioPlayer(item.audioUri ? { uri: item.audioUri } : null, {
-    updateInterval: 100,
+function EntryDetailModal({ entry, onClose }: EntryDetailModalProps) {
+  const insets = useSafeAreaInsets();
+  const progressAnimated = React.useRef(new Animated.Value(0)).current;
+  const scrubProgressRef = React.useRef(0);
+  const player = useAudioPlayer(entry.audioUri ? { uri: entry.audioUri } : null, {
+    updateInterval: 50,
   });
   const playbackStatus = useAudioPlayerStatus(player);
-  const progress = playbackStatus.duration > 0
-    ? Math.min(1, Math.max(0, playbackStatus.currentTime / playbackStatus.duration))
-    : 0;
+  const progress =
+    playbackStatus.duration > 0
+      ? Math.min(1, Math.max(0, playbackStatus.currentTime / playbackStatus.duration))
+      : 0;
+  const [progressTrackWidth, setProgressTrackWidth] = React.useState(0);
+  const [isScrubbing, setIsScrubbing] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isScrubbing) {
+      return;
+    }
+
+    Animated.timing(progressAnimated, {
+      toValue: progress,
+      duration: 90,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    }).start();
+  }, [isScrubbing, progress, progressAnimated]);
+
+  React.useEffect(() => {
+    if (!entry.audioUri || !playbackStatus.didJustFinish) {
+      return;
+    }
+
+    setIsScrubbing(false);
+    scrubProgressRef.current = 0;
+    progressAnimated.setValue(0);
+    void player.seekTo(0).catch(() => undefined);
+  }, [entry.audioUri, playbackStatus.didJustFinish, player, progressAnimated]);
+
+  const updateScrubProgress = React.useCallback((locationX: number) => {
+    if (!progressTrackWidth) {
+      return 0;
+    }
+
+    const nextProgress = Math.min(1, Math.max(0, locationX / progressTrackWidth));
+    scrubProgressRef.current = nextProgress;
+    progressAnimated.setValue(nextProgress);
+    return nextProgress;
+  }, [progressAnimated, progressTrackWidth]);
+
+  const commitScrubProgress = React.useCallback(async (locationX: number) => {
+    const nextProgress = updateScrubProgress(locationX);
+    setIsScrubbing(false);
+
+    if (playbackStatus.playing) {
+      player.pause();
+    }
+
+    if (playbackStatus.duration > 0) {
+      await player.seekTo(nextProgress * playbackStatus.duration).catch(() => undefined);
+    }
+  }, [playbackStatus.duration, playbackStatus.playing, player, updateScrubProgress]);
+
+  const handleScrubGrant = React.useCallback((locationX: number) => {
+    setIsScrubbing(true);
+    if (playbackStatus.playing) {
+      player.pause();
+    }
+    updateScrubProgress(locationX);
+  }, [playbackStatus.playing, player, updateScrubProgress]);
+
+  const handlePlayPausePress = React.useCallback(async () => {
+    if (!entry.audioUri) {
+      return;
+    }
+
+    const audioFile = new File(entry.audioUri);
+    if (!audioFile.exists) {
+      console.warn("[sunday] saved audio file is missing", entry.audioUri);
+      return;
+    }
+
+    if (playbackStatus.playing) {
+      player.pause();
+      return;
+    }
+
+    await setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: "mixWithOthers",
+    });
+
+    if (
+      playbackStatus.duration > 0 &&
+      playbackStatus.currentTime >= Math.max(playbackStatus.duration - 0.05, 0)
+    ) {
+      await player.seekTo(0).catch(() => undefined);
+    }
+
+    console.log("[sunday] playing saved audio", entry.audioUri);
+    player.play();
+  }, [entry.audioUri, playbackStatus.currentTime, playbackStatus.duration, playbackStatus.playing, player]);
+
+  return (
+    <Modal
+      visible
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView edges={[]} style={styles.detailSafe}>
+        <StatusBar barStyle="light-content" />
+        <View
+          style={[
+            styles.detailContent,
+            {
+              paddingTop: insets.top + 10,
+              paddingBottom: Math.max(insets.bottom, 20),
+            },
+          ]}
+        >
+          <View style={styles.detailTopBar}>
+            <Pressable onPress={onClose} style={styles.detailCloseButton}>
+              <Text style={styles.detailCloseText}>Close</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.detailHeaderRow}>
+            <Text numberOfLines={2} style={styles.detailTitle}>
+              {entry.summary}
+            </Text>
+            <Text style={styles.detailTimestamp}>{formatTimestamp(entry.createdAt)}</Text>
+          </View>
+
+          {entry.audioUri ? (
+            <View style={styles.detailControlsRow}>
+              <Pressable onPress={handlePlayPausePress} style={styles.detailPlayButton}>
+                {playbackStatus.playing ? <PauseCircleIcon size={34} /> : <PlayCircleIcon size={34} />}
+              </Pressable>
+              <View
+                onLayout={(event) => setProgressTrackWidth(event.nativeEvent.layout.width)}
+                onMoveShouldSetResponder={() => true}
+                onStartShouldSetResponder={() => true}
+                onResponderGrant={(event) => handleScrubGrant(event.nativeEvent.locationX)}
+                onResponderMove={(event) => updateScrubProgress(event.nativeEvent.locationX)}
+                onResponderRelease={(event) => {
+                  void commitScrubProgress(event.nativeEvent.locationX);
+                }}
+                onResponderTerminate={(event) => {
+                  void commitScrubProgress(event.nativeEvent.locationX);
+                }}
+                style={styles.detailProgressTrack}
+              >
+                <Animated.View
+                  style={[
+                    styles.detailProgressFill,
+                    {
+                      width: progressAnimated.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, progressTrackWidth],
+                        extrapolate: "clamp",
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          ) : null}
+
+          <ScrollView
+            style={styles.detailTranscriptWrap}
+            contentContainerStyle={styles.detailTranscriptContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.detailTranscript}>
+              {entry.transcript || "No transcript available yet."}
+            </Text>
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function AlertRow({ item, onOpenEntry, onDeleteEntry }: AlertRowProps) {
+  const closeBounceX = React.useRef(new Animated.Value(0)).current;
 
   const handleSwipeableWillClose = React.useCallback(() => {
     closeBounceX.stopAnimation();
@@ -113,63 +299,6 @@ function AlertRow({ item, isActive, onPlaybackChange, onDeleteEntry }: AlertRowP
     ]).start();
   }, [closeBounceX]);
 
-  React.useEffect(() => {
-    if (!item.audioUri || isActive) {
-      return;
-    }
-
-    if (playbackStatus.playing || playbackStatus.currentTime > 0) {
-      player.pause();
-      void player.seekTo(0).catch(() => undefined);
-    }
-  }, [
-    isActive,
-    item.audioUri,
-    playbackStatus.currentTime,
-    playbackStatus.playing,
-    player,
-  ]);
-
-  React.useEffect(() => {
-    if (!item.audioUri || !playbackStatus.didJustFinish) {
-      return;
-    }
-
-    onPlaybackChange?.(null);
-    void player.seekTo(0).catch(() => undefined);
-  }, [item.audioUri, onPlaybackChange, playbackStatus.didJustFinish, player]);
-
-  const handlePlayPausePress = React.useCallback(async () => {
-    if (!item.audioUri) {
-      return;
-    }
-
-    if (isActive && playbackStatus.playing) {
-      player.pause();
-      onPlaybackChange?.(null);
-      return;
-    }
-
-    if (
-      playbackStatus.duration > 0 &&
-      playbackStatus.currentTime >= Math.max(playbackStatus.duration - 0.05, 0)
-    ) {
-      await player.seekTo(0).catch(() => undefined);
-    }
-
-    onPlaybackChange?.(item.id);
-    player.play();
-  }, [
-    isActive,
-    item.audioUri,
-    item.id,
-    onPlaybackChange,
-    playbackStatus.currentTime,
-    playbackStatus.duration,
-    playbackStatus.playing,
-    player,
-  ]);
-
   const renderRightActions = React.useCallback(
     (
       progress: Animated.AnimatedInterpolation<number>,
@@ -187,16 +316,18 @@ function AlertRow({ item, isActive, onPlaybackChange, onDeleteEntry }: AlertRowP
       });
       const translateX = dragX.interpolate({
         inputRange: [-156, -96, 0],
-        outputRange: [-8, 0, 22],
+        outputRange: [-8, 0, 0],
         extrapolate: "clamp",
       });
 
       return (
-        <Animated.View style={[styles.deleteActionWrap, { opacity, transform: [{ translateX }, { scale }] }]}>
-          <Pressable
-            onPress={() => onDeleteEntry?.(item.id)}
-            style={styles.deleteAction}
-          >
+        <Animated.View
+          style={[
+            styles.deleteActionWrap,
+            { opacity, transform: [{ translateX }, { scale }] },
+          ]}
+        >
+          <Pressable onPress={() => onDeleteEntry?.(item.id)} style={styles.deleteAction}>
             <TrashIcon />
           </Pressable>
         </Animated.View>
@@ -218,30 +349,15 @@ function AlertRow({ item, isActive, onPlaybackChange, onDeleteEntry }: AlertRowP
           onSwipeableWillClose={handleSwipeableWillClose}
           renderRightActions={renderRightActions}
         >
-          <View style={styles.card}>
+          <Pressable onPress={() => onOpenEntry?.(item.id)} style={styles.card}>
             <View style={styles.cardMain}>
               {item.status === "pending" ? (
-                <View style={styles.leadingAccessory}>
-                  <ActivityIndicator
-                    size="small"
-                    color="#ffffff"
-                  />
+                <View style={styles.loadingSpinnerWrap}>
+                  <ActivityIndicator size="small" color="#ffffff" />
                 </View>
-              ) : item.audioUri ? (
-                <Pressable
-                  hitSlop={8}
-                  onPress={handlePlayPausePress}
-                  style={styles.leadingAccessory}
-                >
-                  {isActive && playbackStatus.playing ? (
-                    <PauseCircleIcon />
-                  ) : (
-                    <PlayCircleIcon />
-                  )}
-                </Pressable>
               ) : null}
               <View style={styles.cardText}>
-                <Text style={styles.summary}>
+                <Text numberOfLines={1} ellipsizeMode="tail" style={styles.summary}>
                   {item.status === "pending" ? "Transcription loading..." : item.summary}
                 </Text>
                 {item.status === "failed" && item.transcript ? (
@@ -250,19 +366,7 @@ function AlertRow({ item, isActive, onPlaybackChange, onDeleteEntry }: AlertRowP
               </View>
             </View>
             <Text style={styles.timestamp}>{formatTimestamp(item.createdAt)}</Text>
-            {item.audioUri ? (
-              <View style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${Math.max(progress * 100, 0)}%`,
-                    },
-                  ]}
-                />
-              </View>
-            ) : null}
-          </View>
+          </Pressable>
         </Swipeable>
       </Animated.View>
     </View>
@@ -272,17 +376,18 @@ function AlertRow({ item, isActive, onPlaybackChange, onDeleteEntry }: AlertRowP
 export function AlertsScreen({ entries, onDeleteEntry }: AlertsScreenProps) {
   const insets = useSafeAreaInsets();
   const headerTopInset = insets.top + 8;
-  const [playingEntryId, setPlayingEntryId] = React.useState<string | null>(null);
+  const [selectedEntryId, setSelectedEntryId] = React.useState<string | null>(null);
+
+  const selectedEntry = React.useMemo(
+    () => entries.find((entry) => entry.id === selectedEntryId) ?? null,
+    [entries, selectedEntryId],
+  );
 
   React.useEffect(() => {
-    if (!playingEntryId) {
-      return;
+    if (selectedEntryId && !selectedEntry) {
+      setSelectedEntryId(null);
     }
-
-    if (!entries.some((entry) => entry.id === playingEntryId)) {
-      setPlayingEntryId(null);
-    }
-  }, [entries, playingEntryId]);
+  }, [selectedEntry, selectedEntryId]);
 
   return (
     <SafeAreaView edges={[]} style={styles.safe}>
@@ -307,12 +412,18 @@ export function AlertsScreen({ entries, onDeleteEntry }: AlertsScreenProps) {
         renderItem={({ item }) => (
           <AlertRow
             item={item}
-            isActive={playingEntryId === item.id}
-            onPlaybackChange={setPlayingEntryId}
+            onOpenEntry={setSelectedEntryId}
             onDeleteEntry={onDeleteEntry}
           />
         )}
       />
+
+      {selectedEntry ? (
+        <EntryDetailModal
+          entry={selectedEntry}
+          onClose={() => setSelectedEntryId(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -365,7 +476,6 @@ const styles = StyleSheet.create({
     backgroundColor: CARD,
     paddingHorizontal: 18,
     paddingVertical: 16,
-    paddingBottom: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -377,9 +487,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingRight: 16,
   },
-  leadingAccessory: {
-    width: 28,
-    height: 28,
+  loadingSpinnerWrap: {
+    width: 20,
+    height: 20,
     marginRight: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -406,21 +516,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.medium,
     textAlign: "right",
   },
-  progressTrack: {
-    position: "absolute",
-    left: 18,
-    right: 18,
-    bottom: 8,
-    height: 3,
-    borderRadius: 999,
-    backgroundColor: "#2f2f2f",
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: "#f4f4f4",
-  },
   rowSeparator: {
     height: 12,
   },
@@ -437,13 +532,97 @@ const styles = StyleSheet.create({
   deleteActionWrap: {
     width: 88,
     paddingLeft: 10,
+    alignItems: "center",
     justifyContent: "center",
   },
   deleteAction: {
-    flex: 1,
-    borderRadius: 18,
+    width: 64,
+    height: 64,
+    borderRadius: 999,
     backgroundColor: DELETE,
     alignItems: "center",
     justifyContent: "center",
+  },
+  detailSafe: {
+    flex: 1,
+    backgroundColor: BACKGROUND,
+  },
+  detailContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  detailTopBar: {
+    alignItems: "flex-end",
+    marginBottom: 18,
+  },
+  detailCloseButton: {
+    minHeight: 38,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#202020",
+  },
+  detailCloseText: {
+    color: "#ffffff",
+    fontFamily: FONTS.medium,
+    fontSize: 14,
+  },
+  detailHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+    marginBottom: 18,
+  },
+  detailTitle: {
+    flex: 1,
+    color: "#ffffff",
+    fontSize: 28,
+    lineHeight: 34,
+    fontFamily: FONTS.semibold,
+  },
+  detailTimestamp: {
+    color: EMPTY,
+    fontSize: 15,
+    fontFamily: FONTS.medium,
+    paddingTop: 6,
+  },
+  detailControlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 24,
+  },
+  detailPlayButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailProgressTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: DETAIL_TRACK,
+    overflow: "hidden",
+  },
+  detailProgressFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "#ffffff",
+  },
+  detailTranscriptWrap: {
+    flex: 1,
+  },
+  detailTranscriptContent: {
+    paddingBottom: 32,
+  },
+  detailTranscript: {
+    color: "#cfcfcf",
+    fontSize: 17,
+    lineHeight: 28,
+    fontFamily: FONTS.regular,
+    fontStyle: "italic",
   },
 });
