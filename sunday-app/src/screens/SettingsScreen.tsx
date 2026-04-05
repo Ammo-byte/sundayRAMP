@@ -101,6 +101,7 @@ const WORKDAY_OPTIONS = [
   { label: "Sa", value: "sat" },
 ] as const;
 const CONNECTED_AGENT_OPTIONS = [
+  "Sunday",
   "OpenAI",
   "Anthropic",
   "Gemini",
@@ -108,6 +109,8 @@ const CONNECTED_AGENT_OPTIONS = [
   "OpenClaw",
 ] as const;
 const BACKEND_OPTIONS = ["Self-hosted", "Vercel"] as const;
+const RECOMMENDED_TRANSCRIPTION_MODEL = "ggml-small.en-q5_1";
+const RECOMMENDED_SUMMARIZATION_MODEL = "qwen2.5-0.5b-instruct";
 type FieldKind = "text" | "number" | "decimal" | "boolean" | "choice" | "select";
 type OptionSheetKind = "agent" | "transcription-model" | "summarization-model";
 
@@ -370,6 +373,10 @@ function formatTimeZoneLabel(value: string) {
     .split("/")
     .map((segment) => segment.replace(/_/g, " "))
     .join(" / ");
+}
+
+function formatModelOptionLabel(option: string, recommendedOption: string | null) {
+  return option === recommendedOption ? `${option} (Recommended)` : option;
 }
 
 function getTimeSettingDate(value: string | boolean | undefined) {
@@ -840,6 +847,7 @@ export function SettingsScreen() {
       return {
         title: "Agent",
         options: CONNECTED_AGENT_OPTIONS,
+        recommendedOption: null,
       };
     }
     if (activeOptionPicker === "transcription-model") {
@@ -849,6 +857,7 @@ export function SettingsScreen() {
           transcriptionModelOptions.length > 0
             ? transcriptionModelOptions
             : [transcriptionModel],
+        recommendedOption: RECOMMENDED_TRANSCRIPTION_MODEL,
       };
     }
     if (activeOptionPicker === "summarization-model") {
@@ -858,6 +867,7 @@ export function SettingsScreen() {
           summarizationModelOptions.length > 0
             ? summarizationModelOptions
             : [summarizationModel],
+        recommendedOption: RECOMMENDED_SUMMARIZATION_MODEL,
       };
     }
     return null;
@@ -1510,7 +1520,7 @@ export function SettingsScreen() {
                   {optionPickerConfig.options.map((option) => (
                     <Picker.Item
                       key={option}
-                      label={option}
+                      label={formatModelOptionLabel(option, optionPickerConfig.recommendedOption)}
                       value={option}
                       color="#ffffff"
                     />

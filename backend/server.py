@@ -284,6 +284,9 @@ def _discover_summarization_models() -> list[str]:
     for root in roots:
         if not root.exists() or not root.is_dir():
             continue
+        for gguf_file in root.rglob("*.gguf"):
+            if gguf_file.is_file():
+                names.add(gguf_file.stem)
         for config_file in root.rglob("config.json"):
             parent = config_file.parent
             has_weights = any(parent.glob("*.safetensors")) or any(parent.glob("pytorch_model*.bin"))
@@ -292,8 +295,14 @@ def _discover_summarization_models() -> list[str]:
 
     configured_name = _display_model_name(Config.transcript_title_model_path)
     configured_dir = configured_path if configured_path.is_dir() else configured_path.parent
-    if configured_dir.exists() and (
-        any(configured_dir.glob("*.safetensors")) or any(configured_dir.glob("pytorch_model*.bin"))
+    if (
+        configured_path.suffix == ".gguf"
+        and configured_path.exists()
+    ) or (
+        configured_dir.exists()
+        and (
+            any(configured_dir.glob("*.safetensors")) or any(configured_dir.glob("pytorch_model*.bin"))
+        )
     ):
         names.add(configured_name)
     return sorted(names, key=str.lower)
