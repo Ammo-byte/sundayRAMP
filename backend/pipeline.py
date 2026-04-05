@@ -17,6 +17,7 @@ from .email_parser import enrich_event_details, get_calendar_readiness_issues, p
 from .errors import ConfigurationError, TravelEstimationError
 from .gmail_watcher import GmailWatcher
 from .messenger import format_leave_alert, send_summary, send_text_message
+from .openclaw import notify_email_event
 from .state_store import get_state_file
 from .travel_estimator import TravelEstimator
 
@@ -477,17 +478,28 @@ async def process_single_email(
             calendar_event_link = calendar_result["event"].get("htmlLink")
             log.info("  → Calendar status: %s", calendar_status)
 
-    await send_summary(
-        parsed_email=parsed,
-        calendar_status=calendar_status,
-        travel_info=travel_info,
-        processing_notes=processing_notes,
-        source_email_link=_build_gmail_thread_link(email_data),
+    _notifiable = (
+        parsed.get("has_event")
+        or parsed.get("needs_response")
+        or parsed.get("action_items")
+        or parsed.get("urgency") in ("high", "medium")
     )
-    log.info("  → Summary sent")
+    if _notifiable:
+        await send_summary(
+            parsed_email=parsed,
+            calendar_status=calendar_status,
+            travel_info=travel_info,
+            processing_notes=processing_notes,
+            source_email_link=_build_gmail_thread_link(email_data),
+        )
+        log.info("  → Summary sent")
+    else:
+        log.info("  → Skipped notification (nothing actionable)")
 
     gmail.mark_as_processed(email_data["id"])
     log.info("  → Gmail message marked as processed")
+
+    await notify_email_event(parsed, subject=email_data.get("subject", ""))
 
     return {
         "email_id": email_data.get("id"),

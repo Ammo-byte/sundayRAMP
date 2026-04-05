@@ -191,6 +191,8 @@ class Config:
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     openclaw_base_url: str = os.getenv("OPENCLAW_BASE_URL", "")
+    openclaw_token: str = os.getenv("OPENCLAW_TOKEN", "")
+    openclaw_enabled: bool = os.getenv("OPENCLAW_ENABLED", "false").lower() == "true"
     llm_requests_per_minute: int | None = _get_optional_int("LLM_REQUESTS_PER_MINUTE")
     llm_retry_attempts: int = int(os.getenv("LLM_RETRY_ATTEMPTS", "4"))
     llm_retry_base_seconds: float = float(os.getenv("LLM_RETRY_BASE_SECONDS", "5"))

@@ -33,6 +33,7 @@ from .main import poll_forever
 from .pipeline import run_pipeline, send_due_leave_alerts
 from .state_store import get_state_file
 from .title_generation import fallback_transcript_title, generate_transcript_title
+from .openclaw import notify_voice_note
 from .transcription import TranscriptionError, transcribe_audio_file
 from .travel_estimator import TravelEstimator
 
@@ -688,6 +689,7 @@ async def transcribe_recording(file: UploadFile = File(...)):
             log.warning("Transcript title generation timed out; using fallback title.")
         log.info("Transcribed recording: %s", transcript)
         log.info("Transcript title: %s", summary)
+        await notify_voice_note(transcript, summary)
         return {"text": transcript, "summary": summary}
     except TranscriptionError as exc:
         log.warning("Transcription failed: %s", exc)

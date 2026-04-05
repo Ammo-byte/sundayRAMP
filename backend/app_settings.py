@@ -42,6 +42,8 @@ APP_SETTINGS: tuple[AppSettingDefinition, ...] = (
     AppSettingDefinition("OPENAI_API_KEY", "openai_api_key", "secret"),
     AppSettingDefinition("ANTHROPIC_API_KEY", "anthropic_api_key", "secret"),
     AppSettingDefinition("OPENCLAW_BASE_URL", "openclaw_base_url", "text"),
+    AppSettingDefinition("OPENCLAW_TOKEN", "openclaw_token", "secret"),
+    AppSettingDefinition("OPENCLAW_ENABLED", "openclaw_enabled", "bool"),
     AppSettingDefinition("GROQ_API_KEY", "llm_providers.groq.api_key", "secret"),
     AppSettingDefinition("GROQ_MODEL", "llm_providers.groq.model", "text"),
     AppSettingDefinition("CEREBRAS_API_KEY", "llm_providers.cerebras.api_key", "secret"),
