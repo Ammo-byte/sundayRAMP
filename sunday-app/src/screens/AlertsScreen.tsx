@@ -480,6 +480,13 @@ function EntryDetailModal({ entry, isDemo = false, onClose, onNavigateToToday }:
     player.play();
   }, [entry.audioUri, playbackStatus.currentTime, playbackStatus.duration, playbackStatus.playing, player]);
 
+  const handleNavigateToToday = React.useCallback(() => {
+    onClose();
+    setTimeout(() => {
+      onNavigateToToday?.();
+    }, 80);
+  }, [onClose, onNavigateToToday]);
+
   return (
     <Modal
       visible
@@ -519,6 +526,7 @@ function EntryDetailModal({ entry, isDemo = false, onClose, onNavigateToToday }:
               nestedScrollEnabled
               showsVerticalScrollIndicator={false}
               style={styles.detailBottomScroll}
+              stickyHeaderIndices={isDemoVoiceEntry ? [0] : undefined}
               contentContainerStyle={[
                 styles.detailBottomScrollContent,
                 { paddingBottom: Math.max(insets.bottom, 20) },
@@ -526,50 +534,49 @@ function EntryDetailModal({ entry, isDemo = false, onClose, onNavigateToToday }:
             >
               <View style={styles.detailBottomStack}>
               {isDemoVoiceEntry ? (
-                <View style={styles.demoDetailPanel}>
-                  <Text style={styles.demoDetailEyebrow}>Step 2 of 3</Text>
-                  <Text style={styles.demoDetailTitle}>This is the transcript Sunday generated</Text>
-                  <Text style={styles.demoDetailBody}>
-                    The text below is what Sunday heard from the voice note. The action cards show what it would have created or sent automatically.
-                  </Text>
-                  {onNavigateToToday ? (
-                    <View style={styles.demoDetailButtonWrap}>
-                      {isDemoNextHighlighted ? (
-                        <Animated.View
-                          pointerEvents="none"
-                          style={[
-                            styles.demoDetailButtonHalo,
-                            {
-                              opacity: demoNextPulse.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [0.35, 0.85],
-                              }),
-                              transform: [
-                                {
-                                  scale: demoNextPulse.interpolate({
-                                    inputRange: [0, 1],
-                                    outputRange: [1, 1.08],
-                                  }),
-                                },
-                              ],
-                            },
-                          ]}
-                        />
-                      ) : null}
-                      <Pressable
-                        onPress={() => {
-                          onClose();
-                          onNavigateToToday();
-                        }}
-                        style={styles.demoDetailButton}
-                      >
-                        <Text style={styles.demoDetailButtonText}>Next: open the created event in Today</Text>
-                      </Pressable>
-                      {isDemoNextHighlighted ? (
-                        <Text style={styles.demoDetailButtonHint}>Tap here</Text>
-                      ) : null}
-                    </View>
-                  ) : null}
+                <View style={styles.demoDetailStickyWrap}>
+                  <View style={styles.demoDetailPanel}>
+                    <Text style={styles.demoDetailEyebrow}>Step 2 of 3</Text>
+                    <Text style={styles.demoDetailTitle}>This is the transcript Sunday generated</Text>
+                    <Text style={styles.demoDetailBody}>
+                      The text below is what Sunday heard from the voice note. The action cards show what it would have created or sent automatically.
+                    </Text>
+                    {onNavigateToToday ? (
+                      <View style={styles.demoDetailButtonWrap}>
+                        {isDemoNextHighlighted ? (
+                          <Animated.View
+                            pointerEvents="none"
+                            style={[
+                              styles.demoDetailButtonHalo,
+                              {
+                                opacity: demoNextPulse.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0.35, 0.85],
+                                }),
+                                transform: [
+                                  {
+                                    scale: demoNextPulse.interpolate({
+                                      inputRange: [0, 1],
+                                      outputRange: [1, 1.08],
+                                    }),
+                                  },
+                                ],
+                              },
+                            ]}
+                          />
+                        ) : null}
+                        <Pressable
+                          onPress={handleNavigateToToday}
+                          style={styles.demoDetailButton}
+                        >
+                          <Text style={styles.demoDetailButtonText}>Next: open the created event in Today</Text>
+                        </Pressable>
+                        {isDemoNextHighlighted ? (
+                          <Text style={styles.demoDetailButtonHint}>Tap here</Text>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
                 </View>
               ) : null}
               {entry.audioUri ? (
@@ -1129,6 +1136,10 @@ const styles = StyleSheet.create({
   },
   detailBottomStack: {
     gap: 6,
+  },
+  demoDetailStickyWrap: {
+    backgroundColor: DETAIL_PANEL,
+    paddingBottom: 6,
   },
   demoDetailPanel: {
     borderRadius: 18,
