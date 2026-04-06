@@ -123,7 +123,7 @@ const CONNECTED_AGENT_OPTIONS = [
   "OpenClaw",
 ] as const;
 const MESSAGE_CHANNEL_OPTIONS = ["iMessage", "Telegram", "WhatsApp"] as const;
-const BACKEND_OPTIONS = ["Self-hosted", "Vercel"] as const;
+const BACKEND_OPTIONS = ["Self-hosted", "Hosted"] as const;
 const RECOMMENDED_TRANSCRIPTION_MODEL = "ggml-small.en-q5_1";
 const RECOMMENDED_SUMMARIZATION_MODEL = "qwen2.5-0.5b-instruct";
 const LLM_PROVIDER_OPTIONS = [
@@ -779,7 +779,7 @@ function inferValidationTargetKeys(message: string) {
   if (upperMessage.includes("IMESSAGE DELIVERY REQUIRES MACOS")) {
     return ["MESSAGE_CHANNEL"];
   }
-  if (upperMessage.includes("IMESSAGE DELIVERY DOES NOT WORK ON VERCEL")) {
+  if (upperMessage.includes("IMESSAGE DELIVERY DOES NOT WORK ON HOSTED BACKENDS")) {
     return ["MESSAGE_CHANNEL", "BACKEND_TARGET"];
   }
   if (upperMessage.startsWith("SPEECH TRANSCRIPTION MODEL NOT FOUND")) {
@@ -1116,8 +1116,8 @@ export function SettingsScreen() {
     async (nextSettings: AppSettingsValues) => {
       const nextAgent = String(nextSettings.CONNECTION_AGENT ?? "").trim() || "Ollama";
       const nextBackendTarget =
-        String(nextSettings.BACKEND_TARGET ?? "").trim() === "Vercel"
-          ? "Vercel"
+        ["Hosted", "Vercel"].includes(String(nextSettings.BACKEND_TARGET ?? "").trim())
+          ? "Hosted"
           : "Self-hosted";
       const nextVercelBaseUrl = String(nextSettings.VERCEL_BASE_URL ?? "").trim();
 
@@ -1419,7 +1419,7 @@ export function SettingsScreen() {
   }, [applySettingsPatch]);
 
   const handleBackendTargetChange = React.useCallback((nextValue: string) => {
-    const normalizedTarget = nextValue === "Vercel" ? "Vercel" : "Self-hosted";
+    const normalizedTarget = nextValue === "Hosted" ? "Hosted" : "Self-hosted";
     setBackendTarget(normalizedTarget);
     applySettingsPatch({ BACKEND_TARGET: normalizedTarget }, { immediate: true });
     void saveConnectionPreferences({ backendTarget: normalizedTarget });
@@ -2484,7 +2484,7 @@ export function SettingsScreen() {
                 {renderFieldValidation("BACKEND_TARGET")}
               </View>
 
-              {backendTarget === "Vercel" ? (
+              {backendTarget === "Hosted" ? (
                 <View style={styles.fieldRow}>
                   <View style={styles.fieldRowMain}>
                     <View style={styles.fieldHeader}>

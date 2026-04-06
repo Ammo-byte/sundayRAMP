@@ -20,7 +20,7 @@ _CONNECTION_AGENT_OPTIONS = (
     "Ollama",
     "OpenClaw",
 )
-_BACKEND_TARGET_OPTIONS = ("Self-hosted", "Vercel")
+_BACKEND_TARGET_OPTIONS = ("Self-hosted", "Hosted")
 _PROVIDER_OPTIONS = tuple(Config.llm_providers.keys())
 _TITLE_DEVICE_OPTIONS = ("auto", "cpu", "mps", "cuda")
 _LOG_LEVEL_OPTIONS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")

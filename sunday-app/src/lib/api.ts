@@ -107,7 +107,7 @@ export async function fetchApi(
 ) {
   const connectionPreferences = await getConnectionPreferences();
   const preferredBaseUrl =
-    connectionPreferences.backendTarget === "Vercel" && connectionPreferences.vercelBaseUrl
+    connectionPreferences.backendTarget === "Hosted" && connectionPreferences.vercelBaseUrl
       ? normalizeBaseUrl(connectionPreferences.vercelBaseUrl)
       : null;
   const method = (init.method ?? "GET").toUpperCase();

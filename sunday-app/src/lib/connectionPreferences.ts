@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const CONNECTION_PREFERENCES_KEY = "sunday.connection.preferences";
 
-export type BackendTarget = "Self-hosted" | "Vercel";
+export type BackendTarget = "Self-hosted" | "Hosted";
 
 export type ConnectionPreferences = {
   connectedAgent: string;
@@ -30,7 +30,9 @@ export async function getConnectionPreferences(): Promise<ConnectionPreferences>
           ? parsed.connectedAgent
           : DEFAULT_CONNECTION_PREFERENCES.connectedAgent,
       backendTarget:
-        parsed.backendTarget === "Vercel" ? "Vercel" : DEFAULT_CONNECTION_PREFERENCES.backendTarget,
+        parsed.backendTarget === "Hosted" || parsed.backendTarget === "Vercel"
+          ? "Hosted"
+          : DEFAULT_CONNECTION_PREFERENCES.backendTarget,
       vercelBaseUrl:
         typeof parsed.vercelBaseUrl === "string" ? parsed.vercelBaseUrl.trim() : "",
     };

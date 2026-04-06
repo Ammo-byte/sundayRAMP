@@ -110,6 +110,16 @@ def _default_message_channel() -> str:
     return "Telegram"
 
 
+def _normalize_backend_target(value: str) -> str:
+    """Normalize legacy backend target labels to the current Hosted wording."""
+    cleaned = value.strip()
+    if cleaned == "Vercel":
+        return "Hosted"
+    if cleaned == "Hosted":
+        return "Hosted"
+    return "Self-hosted"
+
+
 def _is_valid_hhmm(value: str) -> bool:
     """Return true when a config time string looks like HH:MM."""
     try:
@@ -277,7 +287,9 @@ class Config:
     # AGENT_MODE: off | openclaw | builtin
     agent_mode: str = os.getenv("AGENT_MODE", "off")
     connection_agent: str = os.getenv("CONNECTION_AGENT", "Ollama").strip() or "Ollama"
-    backend_target: str = os.getenv("BACKEND_TARGET", "Self-hosted").strip() or "Self-hosted"
+    backend_target: str = _normalize_backend_target(
+        os.getenv("BACKEND_TARGET", "Self-hosted")
+    )
     vercel_base_url: str = os.getenv("VERCEL_BASE_URL", "").strip()
     llm_requests_per_minute: int | None = _get_optional_int("LLM_REQUESTS_PER_MINUTE")
     llm_retry_attempts: int = int(os.getenv("LLM_RETRY_ATTEMPTS", "4"))
@@ -347,11 +359,11 @@ class Config:
             errors.append("LLM_RETRY_BASE_SECONDS must be greater than 0.")
         if cls.llm_requests_per_minute is not None and cls.llm_requests_per_minute < 1:
             errors.append("LLM_REQUESTS_PER_MINUTE must be at least 1 when set.")
-        if cls.backend_target not in {"Self-hosted", "Vercel"}:
-            errors.append("BACKEND_TARGET must be either Self-hosted or Vercel.")
-        if cls.backend_target == "Vercel" and not cls.vercel_base_url:
+        if cls.backend_target not in {"Self-hosted", "Hosted"}:
+            errors.append("BACKEND_TARGET must be either Self-hosted or Hosted.")
+        if cls.backend_target == "Hosted" and not cls.vercel_base_url:
             warnings.append(
-                "VERCEL_BASE_URL is empty while BACKEND_TARGET is set to Vercel."
+                "VERCEL_BASE_URL is empty while BACKEND_TARGET is set to Hosted."
             )
 
         valid_message_channels = {"iMessage", "Telegram", "WhatsApp"}
@@ -365,9 +377,9 @@ class Config:
         elif cls.message_channel == "iMessage":
             if not cls.imessage_recipient:
                 errors.append("IMESSAGE_RECIPIENT is required when MESSAGE_CHANNEL=iMessage.")
-            if os.getenv("VERCEL") or cls.backend_target == "Vercel":
+            if os.getenv("VERCEL") or cls.backend_target == "Hosted":
                 errors.append(
-                    "iMessage delivery does not work on Vercel. Choose Telegram or WhatsApp for deployed backends."
+                    "iMessage delivery does not work on hosted backends. Choose Telegram or WhatsApp for deployed backends."
                 )
             elif sys.platform != "darwin":
                 warnings.append("iMessage delivery requires macOS and osascript.")
