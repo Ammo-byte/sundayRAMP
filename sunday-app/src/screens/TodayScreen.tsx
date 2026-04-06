@@ -20,7 +20,12 @@ import {
 import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { PageCoachOverlay, useDelayedCoach } from "../components/PageCoachOverlay";
+import {
+  COACH_HIGHLIGHT_DELAY_MS,
+  GUIDED_COACH_DELAY_MS,
+  PageCoachOverlay,
+  useDelayedCoach,
+} from "../components/PageCoachOverlay";
 import { FONTS } from "../constants/fonts";
 import {
   CalendarPreferences,
@@ -510,15 +515,13 @@ function DemoWalkthroughCard() {
 export function TodayScreen({
   isDemo = false,
   isActive = true,
-  showCoachImmediately = false,
-  onImmediateCoachConsumed,
+  guidedCoachToken = null,
   onNavigateToEntries,
   onNavigateToSettings,
 }: {
   isDemo?: boolean;
   isActive?: boolean;
-  showCoachImmediately?: boolean;
-  onImmediateCoachConsumed?: () => void;
+  guidedCoachToken?: number | null;
   onNavigateToEntries?: () => void;
   onNavigateToSettings?: () => void;
 }) {
@@ -543,7 +546,7 @@ export function TodayScreen({
   const { visible: isCoachVisible, dismiss: dismissCoach } = useDelayedCoach(
     shouldShowCoachNow,
     undefined,
-    { showImmediately: showCoachImmediately && shouldShowCoachNow },
+    { priorityDelayMs: GUIDED_COACH_DELAY_MS, priorityToken: guidedCoachToken },
   );
   const eventLocationPreviewCacheRef = React.useRef<Record<string, GeocodeSearchResponse | null>>(
     {},
@@ -665,11 +668,6 @@ export function TodayScreen({
     [filteredEvents],
   );
 
-  React.useEffect(() => {
-    if (showCoachImmediately && shouldShowCoachNow) {
-      onImmediateCoachConsumed?.();
-    }
-  }, [onImmediateCoachConsumed, shouldShowCoachNow, showCoachImmediately]);
   const selectedEventCalendarColor = React.useMemo(() => {
     if (!selectedEvent) {
       return ACCENT;
@@ -1327,6 +1325,7 @@ export function TodayScreen({
               ? { label: "Open Settings", onPress: onNavigateToSettings }
               : undefined
         }
+        highlightPrimaryAfterMs={COACH_HIGHLIGHT_DELAY_MS}
         secondaryAction={
           featuredEvent && onNavigateToEntries
             ? { label: "Open Entries", onPress: onNavigateToEntries }

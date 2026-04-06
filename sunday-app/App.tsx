@@ -191,12 +191,15 @@ function Main({
   const recordIconProgress = React.useRef(new Animated.Value(0)).current;
   const [activeIndex, setActiveIndex] = React.useState(INITIAL_INDEX);
   const [navVisible, setNavVisible] = React.useState(true);
-  const [guidedCoachTarget, setGuidedCoachTarget] = React.useState<"record" | "alerts" | "today" | null>(
-    startDemoGuideImmediately ? "record" : null,
-  );
+  const [guidedCoachTarget, setGuidedCoachTarget] = React.useState<{
+    screen: "record" | "alerts" | "today";
+    token: number;
+  } | null>(startDemoGuideImmediately ? { screen: "record", token: Date.now() } : null);
 
   React.useEffect(() => {
-    setGuidedCoachTarget(startDemoGuideImmediately ? "record" : null);
+    setGuidedCoachTarget(
+      startDemoGuideImmediately ? { screen: "record", token: Date.now() } : null,
+    );
   }, [startDemoGuideImmediately]);
 
   React.useEffect(() => {
@@ -348,7 +351,9 @@ function Main({
   const navigateWithGuide = React.useCallback(
     (index: number, target: "record" | "alerts" | "today" | null = null) => {
       if (isDemo) {
-        setGuidedCoachTarget(target);
+        setGuidedCoachTarget(
+          target ? { screen: target, token: Date.now() } : null,
+        );
       }
       handleTabPress(index);
     },
@@ -595,8 +600,7 @@ function Main({
           <TodayScreen
             isDemo={isDemo}
             isActive={activeIndex === 1}
-            showCoachImmediately={guidedCoachTarget === "today"}
-            onImmediateCoachConsumed={() => setGuidedCoachTarget((current) => (current === "today" ? null : current))}
+            guidedCoachToken={guidedCoachTarget?.screen === "today" ? guidedCoachTarget.token : null}
             onNavigateToEntries={() => navigateWithGuide(ALERTS_TAB_INDEX, isDemo ? "alerts" : null)}
             onNavigateToSettings={() => handleTabPress(0)}
           />
@@ -606,9 +610,8 @@ function Main({
             isDemo={isDemo}
             isActive={activeIndex === RECORD_TAB_INDEX}
             hasEntries={alertEntries.length > 0}
-            showCoachImmediately={guidedCoachTarget === "record"}
+            guidedCoachToken={guidedCoachTarget?.screen === "record" ? guidedCoachTarget.token : null}
             onBackgroundPress={handleRecordBackgroundPress}
-            onImmediateCoachConsumed={() => setGuidedCoachTarget((current) => (current === "record" ? null : current))}
             onNavigateToEntries={() => navigateWithGuide(ALERTS_TAB_INDEX, isDemo ? "alerts" : null)}
             onTranscriptPending={handleTranscriptPending}
             onTranscript={handleTranscript}
@@ -621,9 +624,8 @@ function Main({
             entries={alertEntries}
             isDemo={isDemo}
             isActive={activeIndex === ALERTS_TAB_INDEX}
-            showCoachImmediately={guidedCoachTarget === "alerts"}
+            guidedCoachToken={guidedCoachTarget?.screen === "alerts" ? guidedCoachTarget.token : null}
             onDeleteEntry={handleDeleteAlert}
-            onImmediateCoachConsumed={() => setGuidedCoachTarget((current) => (current === "alerts" ? null : current))}
             onNavigateToToday={() => navigateWithGuide(1, isDemo ? "today" : null)}
             onNavigateToRecord={() => navigateWithGuide(RECORD_TAB_INDEX, isDemo ? "record" : null)}
           />

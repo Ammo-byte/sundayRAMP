@@ -3,6 +3,8 @@ import { Animated, Platform, Pressable, StyleSheet, Text, View } from "react-nat
 import { FONTS } from "../constants/fonts";
 
 export const COACH_DELAY_MS = 10_000;
+export const GUIDED_COACH_DELAY_MS = 1_500;
+export const COACH_HIGHLIGHT_DELAY_MS = 8_000;
 
 type CoachAction = {
   label: string;
@@ -23,7 +25,8 @@ type PageCoachOverlayProps = {
 };
 
 type UseDelayedCoachOptions = {
-  showImmediately?: boolean;
+  priorityDelayMs?: number;
+  priorityToken?: number | string | null;
 };
 
 export function useDelayedCoach(
@@ -33,7 +36,8 @@ export function useDelayedCoach(
 ) {
   const [visible, setVisible] = React.useState(false);
   const dismissedRef = React.useRef(false);
-  const { showImmediately = false } = options;
+  const lastPriorityTokenRef = React.useRef<number | string | null>(null);
+  const { priorityDelayMs = delayMs, priorityToken = null } = options;
 
   React.useEffect(() => {
     if (!active) {
@@ -43,21 +47,21 @@ export function useDelayedCoach(
     }
 
     dismissedRef.current = false;
-    if (showImmediately) {
-      setVisible(true);
-      return;
-    }
-
     setVisible(false);
+    const shouldUsePriorityDelay =
+      priorityToken !== null && priorityToken !== lastPriorityTokenRef.current;
 
     const timeout = setTimeout(() => {
       if (!dismissedRef.current) {
+        if (shouldUsePriorityDelay) {
+          lastPriorityTokenRef.current = priorityToken;
+        }
         setVisible(true);
       }
-    }, delayMs);
+    }, shouldUsePriorityDelay ? priorityDelayMs : delayMs);
 
     return () => clearTimeout(timeout);
-  }, [active, delayMs, showImmediately]);
+  }, [active, delayMs, priorityDelayMs, priorityToken]);
 
   const dismiss = React.useCallback(() => {
     dismissedRef.current = true;
@@ -75,7 +79,7 @@ export function PageCoachOverlay({
   steps = [],
   primaryAction,
   secondaryAction,
-  highlightPrimaryAfterMs = COACH_DELAY_MS,
+  highlightPrimaryAfterMs = COACH_HIGHLIGHT_DELAY_MS,
   onDismiss,
 }: PageCoachOverlayProps) {
   const [isPrimaryHighlighted, setIsPrimaryHighlighted] = React.useState(false);

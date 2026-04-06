@@ -9,7 +9,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { PageCoachOverlay, useDelayedCoach } from "../components/PageCoachOverlay";
+import {
+  COACH_HIGHLIGHT_DELAY_MS,
+  GUIDED_COACH_DELAY_MS,
+  PageCoachOverlay,
+  useDelayedCoach,
+} from "../components/PageCoachOverlay";
 import { useRecorder } from "../lib/recorder";
 import { ActionItem } from "../lib/alertEntries";
 import { persistRecordingFile } from "../lib/entryStore";
@@ -25,9 +30,8 @@ type HomeScreenProps = {
   isDemo?: boolean;
   isActive?: boolean;
   hasEntries?: boolean;
-  showCoachImmediately?: boolean;
+  guidedCoachToken?: number | null;
   onBackgroundPress?: () => void;
-  onImmediateCoachConsumed?: () => void;
   onNavigateToEntries?: () => void;
   onTranscriptPending?: (audioUri: string) => string;
   onTranscript?: (entryId: string, transcript: string, summary?: string, actions?: ActionItem[]) => void;
@@ -39,9 +43,8 @@ export function HomeScreen({
   isDemo = false,
   isActive = true,
   hasEntries = false,
-  showCoachImmediately = false,
+  guidedCoachToken = null,
   onBackgroundPress,
-  onImmediateCoachConsumed,
   onNavigateToEntries,
   onTranscriptPending,
   onTranscript,
@@ -56,14 +59,8 @@ export function HomeScreen({
   const { visible: isCoachVisible, dismiss: dismissCoach } = useDelayedCoach(
     shouldShowCoachNow,
     undefined,
-    { showImmediately: showCoachImmediately && shouldShowCoachNow },
+    { priorityDelayMs: GUIDED_COACH_DELAY_MS, priorityToken: guidedCoachToken },
   );
-
-  React.useEffect(() => {
-    if (showCoachImmediately && shouldShowCoachNow) {
-      onImmediateCoachConsumed?.();
-    }
-  }, [onImmediateCoachConsumed, shouldShowCoachNow, showCoachImmediately]);
 
   React.useEffect(() => {
     onRecordingChange?.(isRecording);
@@ -206,6 +203,7 @@ export function HomeScreen({
                 }
               : undefined
           }
+          highlightPrimaryAfterMs={COACH_HIGHLIGHT_DELAY_MS}
           onDismiss={dismissCoach}
         />
       </View>

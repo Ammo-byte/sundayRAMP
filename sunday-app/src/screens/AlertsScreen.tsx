@@ -21,7 +21,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { PageCoachOverlay, useDelayedCoach } from "../components/PageCoachOverlay";
+import {
+  COACH_HIGHLIGHT_DELAY_MS,
+  GUIDED_COACH_DELAY_MS,
+  PageCoachOverlay,
+  useDelayedCoach,
+} from "../components/PageCoachOverlay";
 import { FONTS } from "../constants/fonts";
 import { ActionItem, AlertEntry } from "../lib/alertEntries";
 
@@ -38,9 +43,8 @@ type AlertsScreenProps = {
   entries: AlertEntry[];
   isDemo?: boolean;
   isActive?: boolean;
-  showCoachImmediately?: boolean;
+  guidedCoachToken?: number | null;
   onDeleteEntry?: (entryId: string) => void;
-  onImmediateCoachConsumed?: () => void;
   onNavigateToToday?: () => void;
   onNavigateToRecord?: () => void;
 };
@@ -760,9 +764,8 @@ export function AlertsScreen({
   entries,
   isDemo = false,
   isActive = true,
-  showCoachImmediately = false,
+  guidedCoachToken = null,
   onDeleteEntry,
-  onImmediateCoachConsumed,
   onNavigateToToday,
   onNavigateToRecord,
 }: AlertsScreenProps) {
@@ -773,7 +776,7 @@ export function AlertsScreen({
   const { visible: isCoachVisible, dismiss: dismissCoach } = useDelayedCoach(
     shouldShowCoachNow,
     undefined,
-    { showImmediately: showCoachImmediately && shouldShowCoachNow },
+    { priorityDelayMs: GUIDED_COACH_DELAY_MS, priorityToken: guidedCoachToken },
   );
 
   const selectedEntry = React.useMemo(
@@ -790,12 +793,6 @@ export function AlertsScreen({
       setSelectedEntryId(null);
     }
   }, [selectedEntry, selectedEntryId]);
-
-  React.useEffect(() => {
-    if (showCoachImmediately && shouldShowCoachNow) {
-      onImmediateCoachConsumed?.();
-    }
-  }, [onImmediateCoachConsumed, shouldShowCoachNow, showCoachImmediately]);
 
   return (
     <SafeAreaView edges={[]} style={styles.safe}>
@@ -872,6 +869,7 @@ export function AlertsScreen({
               ? { label: "Go to Record", onPress: onNavigateToRecord }
               : undefined
         }
+        highlightPrimaryAfterMs={COACH_HIGHLIGHT_DELAY_MS}
         secondaryAction={
           firstEntryId && onNavigateToRecord
             ? { label: "Go to Record", onPress: onNavigateToRecord }
