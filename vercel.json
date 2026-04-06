@@ -12,13 +12,7 @@
       "dest": "server.py"
     }
   ],
-  "crons": [
-    {
-      "path": "/api/process",
-      "schedule": "* * * * *"
-    }
-  ],
-  "env": {
+"env": {
     "ACTIVE_LLM_PROVIDER": "gemini"
   }
 }
