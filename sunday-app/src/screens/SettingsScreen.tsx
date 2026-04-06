@@ -124,6 +124,7 @@ const CONNECTED_AGENT_OPTIONS = [
 ] as const;
 const MESSAGE_CHANNEL_OPTIONS = ["iMessage", "Telegram", "WhatsApp"] as const;
 const BACKEND_OPTIONS = ["Self-hosted", "Hosted"] as const;
+const DEFAULT_HOSTED_BACKEND_URL = "https://sundayramp-production.up.railway.app";
 const RECOMMENDED_TRANSCRIPTION_MODEL = "ggml-small.en-q5_1";
 const RECOMMENDED_SUMMARIZATION_MODEL = "qwen2.5-0.5b-instruct";
 const LLM_PROVIDER_OPTIONS = [
@@ -858,7 +859,7 @@ function getInitialSettingsState() {
   }
   values.CONNECTION_AGENT = "Ollama";
   values.BACKEND_TARGET = Platform.OS === "web" ? "Hosted" : "Self-hosted";
-  values.VERCEL_BASE_URL = "";
+  values.VERCEL_BASE_URL = DEFAULT_HOSTED_BACKEND_URL;
   values.MESSAGE_CHANNEL = "Telegram";
   return values;
 }

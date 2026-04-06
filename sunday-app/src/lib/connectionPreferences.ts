@@ -2,7 +2,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 const CONNECTION_PREFERENCES_KEY = "sunday.connection.preferences";
+const DEFAULT_HOSTED_BACKEND_URL = "https://sundayramp-production.up.railway.app";
 const DEFAULT_BACKEND_TARGET: BackendTarget = Platform.OS === "web" ? "Hosted" : "Self-hosted";
+
+function normalizeHostedBackendUrl(value: string | undefined) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed || trimmed.includes(".vercel.app")) {
+    return DEFAULT_HOSTED_BACKEND_URL;
+  }
+  return trimmed;
+}
 
 export type BackendTarget = "Self-hosted" | "Hosted";
 
@@ -15,7 +24,7 @@ export type ConnectionPreferences = {
 const DEFAULT_CONNECTION_PREFERENCES: ConnectionPreferences = {
   connectedAgent: "Ollama",
   backendTarget: DEFAULT_BACKEND_TARGET,
-  vercelBaseUrl: "",
+  vercelBaseUrl: DEFAULT_HOSTED_BACKEND_URL,
 };
 
 export async function getConnectionPreferences(): Promise<ConnectionPreferences> {
@@ -35,8 +44,7 @@ export async function getConnectionPreferences(): Promise<ConnectionPreferences>
         parsed.backendTarget === "Hosted" || parsed.backendTarget === "Vercel"
           ? "Hosted"
           : DEFAULT_CONNECTION_PREFERENCES.backendTarget,
-      vercelBaseUrl:
-        typeof parsed.vercelBaseUrl === "string" ? parsed.vercelBaseUrl.trim() : "",
+      vercelBaseUrl: normalizeHostedBackendUrl(parsed.vercelBaseUrl),
     };
   } catch {
     return DEFAULT_CONNECTION_PREFERENCES;
@@ -54,10 +62,7 @@ export async function saveConnectionPreferences(
       typeof nextPreferences.connectedAgent === "string"
         ? nextPreferences.connectedAgent
         : current.connectedAgent,
-    vercelBaseUrl:
-      typeof nextPreferences.vercelBaseUrl === "string"
-        ? nextPreferences.vercelBaseUrl.trim()
-        : current.vercelBaseUrl,
+    vercelBaseUrl: normalizeHostedBackendUrl(nextPreferences.vercelBaseUrl ?? current.vercelBaseUrl),
   };
   await AsyncStorage.setItem(CONNECTION_PREFERENCES_KEY, JSON.stringify(merged));
   return merged;
