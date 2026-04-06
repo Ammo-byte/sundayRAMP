@@ -6,11 +6,8 @@ const DEFAULT_HOSTED_BACKEND_URL = "https://sundayramp-production.up.railway.app
 const DEFAULT_BACKEND_TARGET: BackendTarget = "Hosted";
 
 function normalizeHostedBackendUrl(value: string | undefined) {
-  const trimmed = typeof value === "string" ? value.trim() : "";
-  if (!trimmed || trimmed.includes(".vercel.app")) {
-    return DEFAULT_HOSTED_BACKEND_URL;
-  }
-  return trimmed;
+  void value;
+  return DEFAULT_HOSTED_BACKEND_URL;
 }
 
 export type BackendTarget = "Self-hosted" | "Hosted";
@@ -60,6 +57,7 @@ export async function saveConnectionPreferences(
   nextPreferences: Partial<ConnectionPreferences>,
 ): Promise<ConnectionPreferences> {
   const current = await getConnectionPreferences();
+  const nextBackendTarget = nextPreferences.backendTarget ?? current.backendTarget;
   const merged: ConnectionPreferences = {
     ...current,
     ...nextPreferences,
@@ -67,7 +65,11 @@ export async function saveConnectionPreferences(
       typeof nextPreferences.connectedAgent === "string"
         ? nextPreferences.connectedAgent
         : current.connectedAgent,
-    vercelBaseUrl: normalizeHostedBackendUrl(nextPreferences.vercelBaseUrl ?? current.vercelBaseUrl),
+    backendTarget: nextBackendTarget,
+    vercelBaseUrl:
+      nextBackendTarget === "Hosted"
+        ? DEFAULT_HOSTED_BACKEND_URL
+        : normalizeHostedBackendUrl(nextPreferences.vercelBaseUrl ?? current.vercelBaseUrl),
   };
   await AsyncStorage.setItem(CONNECTION_PREFERENCES_KEY, JSON.stringify(merged));
   return merged;

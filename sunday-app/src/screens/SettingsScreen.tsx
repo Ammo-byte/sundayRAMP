@@ -904,6 +904,22 @@ function defaultPickerCoordinate(settings: AppSettingsValues) {
   };
 }
 
+function normalizeHostedSettings(settings: AppSettingsValues) {
+  const rawBackendTarget = String(settings.BACKEND_TARGET ?? "").trim();
+  if (!["Hosted", "Vercel"].includes(rawBackendTarget)) {
+    return settings;
+  }
+
+  if (String(settings.VERCEL_BASE_URL ?? "").trim() === DEFAULT_HOSTED_BACKEND_URL) {
+    return settings;
+  }
+
+  return {
+    ...settings,
+    VERCEL_BASE_URL: DEFAULT_HOSTED_BACKEND_URL,
+  };
+}
+
 function isTimeSettingKey(value: string): value is TimeSettingKey {
   return (TIME_SETTING_KEYS as readonly string[]).includes(value);
 }
@@ -1155,7 +1171,10 @@ export function SettingsScreen() {
           : Platform.OS === "web" && backendTarget === "Hosted"
             ? "Hosted"
             : "Self-hosted";
-      const nextVercelBaseUrl = String(nextSettings.VERCEL_BASE_URL ?? "").trim();
+      const nextVercelBaseUrl =
+        nextBackendTarget === "Hosted"
+          ? DEFAULT_HOSTED_BACKEND_URL
+          : String(nextSettings.VERCEL_BASE_URL ?? "").trim();
 
       setConnectedAgent(nextAgent);
       setBackendTarget(nextBackendTarget);
@@ -1173,7 +1192,10 @@ export function SettingsScreen() {
   const loadSettings = React.useCallback(async () => {
     try {
       const response = await fetchAppSettings();
-      const nextSettings = { ...getInitialSettingsState(), ...response.settings };
+      const nextSettings = normalizeHostedSettings({
+        ...getInitialSettingsState(),
+        ...response.settings,
+      });
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
         retryTimeoutRef.current = null;
@@ -1296,7 +1318,7 @@ export function SettingsScreen() {
           return;
         }
 
-        const nextSettings = { ...snapshot, ...response.settings };
+        const nextSettings = normalizeHostedSettings({ ...snapshot, ...response.settings });
         settingsRef.current = nextSettings;
         lastSavedSettingsRef.current = serializeSettings(nextSettings);
         setSettings(nextSettings);
@@ -1454,19 +1476,23 @@ export function SettingsScreen() {
   const handleBackendTargetChange = React.useCallback((nextValue: string) => {
     const normalizedTarget = nextValue === "Hosted" ? "Hosted" : "Self-hosted";
     setBackendTarget(normalizedTarget);
-    applySettingsPatch({ BACKEND_TARGET: normalizedTarget }, { immediate: true });
-    void saveConnectionPreferences({ backendTarget: normalizedTarget });
-  }, [applySettingsPatch]);
-
-  const handleVercelBaseUrlChange = React.useCallback((value: string) => {
-    setVercelBaseUrl(value);
-    applySettingsPatch({ VERCEL_BASE_URL: value });
-  }, [applySettingsPatch]);
-
-  const handleVercelBaseUrlBlur = React.useCallback(() => {
-    void saveConnectionPreferences({ vercelBaseUrl });
-    saveImmediately(settingsRef.current);
-  }, [saveImmediately, vercelBaseUrl]);
+    const nextHostedUrl =
+      normalizedTarget === "Hosted"
+        ? DEFAULT_HOSTED_BACKEND_URL
+        : vercelBaseUrl;
+    setVercelBaseUrl(nextHostedUrl);
+    applySettingsPatch(
+      {
+        BACKEND_TARGET: normalizedTarget,
+        VERCEL_BASE_URL: nextHostedUrl,
+      },
+      { immediate: true },
+    );
+    void saveConnectionPreferences({
+      backendTarget: normalizedTarget,
+      vercelBaseUrl: nextHostedUrl,
+    });
+  }, [applySettingsPatch, vercelBaseUrl]);
 
   const openTimezonePicker = React.useCallback(() => {
     setPendingTimezone(String(settings.TIMEZONE ?? "") || "America/Chicago");
@@ -2520,21 +2546,16 @@ export function SettingsScreen() {
                 <View style={styles.fieldRow}>
                   <View style={styles.fieldRowMain}>
                     <View style={styles.fieldHeader}>
-                      <Text numberOfLines={1} style={styles.fieldLabel}>Railway backend URL</Text>
+                      <Text numberOfLines={1} style={styles.fieldLabel}>Railway backend</Text>
                     </View>
-                    <TextInput
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardAppearance="dark"
-                      keyboardType="url"
-                      onBlur={handleVercelBaseUrlBlur}
-                      onChangeText={handleVercelBaseUrlChange}
-                      onFocus={(event) => handleTextInputFocus(event.nativeEvent.target)}
-                      placeholder="https://your-app.up.railway.app"
-                      placeholderTextColor="#6f6f6f"
-                      style={styles.input}
-                      value={vercelBaseUrl}
-                    />
+                    <View style={styles.lockedBackendCard}>
+                      <Text numberOfLines={1} style={styles.lockedBackendValue}>
+                        {DEFAULT_HOSTED_BACKEND_URL}
+                      </Text>
+                      <Text style={styles.lockedBackendNote}>
+                        Hosted is already configured. No URL setup is needed here.
+                      </Text>
+                    </View>
                   </View>
                   {renderFieldValidation("VERCEL_BASE_URL")}
                 </View>
@@ -2913,6 +2934,26 @@ const styles = StyleSheet.create({
   },
   locationValuePlaceholder: {
     color: "#6f6f6f",
+  },
+  lockedBackendCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: PANEL_ALT,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  lockedBackendValue: {
+    color: "#ffffff",
+    fontFamily: FONTS.regular,
+    fontSize: 14,
+  },
+  lockedBackendNote: {
+    color: MUTED,
+    fontFamily: FONTS.regular,
+    fontSize: 13,
+    lineHeight: 18,
   },
   phoneLocationLabel: {
     color: MUTED,
