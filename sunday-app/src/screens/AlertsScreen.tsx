@@ -338,14 +338,6 @@ function EntryDetailModal({ entry, isDemo = false, onClose, onNavigateToToday }:
       : 0;
   const [progressTrackWidth, setProgressTrackWidth] = React.useState(0);
   const [isScrubbing, setIsScrubbing] = React.useState(false);
-  const [transcriptViewportHeight, setTranscriptViewportHeight] = React.useState(0);
-  const [transcriptContentHeight, setTranscriptContentHeight] = React.useState(0);
-  const [transcriptScrollY, setTranscriptScrollY] = React.useState(0);
-  const transcriptOverflow = transcriptContentHeight - transcriptViewportHeight > 2;
-  const showTopFade = transcriptOverflow && transcriptScrollY > 2;
-  const showBottomFade =
-    transcriptOverflow &&
-    transcriptScrollY < transcriptContentHeight - transcriptViewportHeight - 2;
   const isDemoVoiceEntry = isDemo && entry.id === DEMO_VOICE_ENTRY_ID;
 
   React.useEffect(() => {
@@ -472,137 +464,98 @@ function EntryDetailModal({ entry, isDemo = false, onClose, onNavigateToToday }:
           <View
             style={[
               styles.detailBottomPanel,
-              {
-                paddingBottom: Math.max(insets.bottom, 20),
-              },
             ]}
           >
-            <View style={styles.detailBottomStack}>
-            {isDemoVoiceEntry ? (
-              <View style={styles.demoDetailPanel}>
-                <Text style={styles.demoDetailEyebrow}>Step 2 of 3</Text>
-                <Text style={styles.demoDetailTitle}>This is the transcript Sunday generated</Text>
-                <Text style={styles.demoDetailBody}>
-                  The text below is what Sunday heard from the voice note. The action cards show what it would have created or sent automatically.
-                </Text>
-                {onNavigateToToday ? (
-                  <Pressable
-                    onPress={() => {
-                      onClose();
-                      onNavigateToToday();
-                    }}
-                    style={styles.demoDetailButton}
-                  >
-                    <Text style={styles.demoDetailButtonText}>Next: open the created event in Today</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-            {entry.audioUri ? (
-              <View style={styles.detailControlsRow}>
-                <Pressable onPress={handlePlayPausePress} style={styles.detailPlayButton}>
-                  {playbackStatus.playing ? <PauseCircleIcon size={34} /> : <PlayCircleIcon size={34} />}
-                </Pressable>
-                <View style={styles.detailProgressColumn}>
-                  <View
-                    onLayout={(event) => setProgressTrackWidth(event.nativeEvent.layout.width)}
-                    onMoveShouldSetResponder={() => true}
-                    onStartShouldSetResponder={() => true}
-                    onResponderGrant={(event) => handleScrubGrant(event.nativeEvent.locationX)}
-                    onResponderMove={(event) => updateScrubProgress(event.nativeEvent.locationX)}
-                    onResponderRelease={(event) => {
-                      void commitScrubProgress(event.nativeEvent.locationX);
-                    }}
-                    onResponderTerminate={(event) => {
-                      void commitScrubProgress(event.nativeEvent.locationX);
-                    }}
-                    style={styles.detailProgressTrack}
-                  >
-                    <Animated.View
-                      style={[
-                        styles.detailProgressFill,
-                        {
-                          width: progressAnimated.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, progressTrackWidth],
-                            extrapolate: "clamp",
-                          }),
-                        },
-                      ]}
-                    />
-                  </View>
-                  <View style={styles.detailProgressTimes}>
-                    <Text style={styles.detailTimeText}>
-                      {formatAudioTime(
-                        isScrubbing
-                          ? scrubProgressRef.current * playbackStatus.duration
-                          : playbackStatus.currentTime,
-                      )}
-                    </Text>
-                    <Text style={styles.detailTimeText}>
-                      {formatAudioTime(playbackStatus.duration)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ) : null}
-
-            <View
-              onLayout={(event) => setTranscriptViewportHeight(event.nativeEvent.layout.height)}
-              style={styles.detailTranscriptViewport}
-            >
-              <ScrollView
-                style={styles.detailTranscriptWrap}
-                contentContainerStyle={styles.detailTranscriptScrollContent}
-                showsVerticalScrollIndicator={false}
-                scrollEventThrottle={16}
-                onContentSizeChange={(_, height) => setTranscriptContentHeight(height)}
-                onScroll={(event) => setTranscriptScrollY(event.nativeEvent.contentOffset.y)}
-              >
-                <View
-                  style={[
-                    styles.detailTranscriptContent,
-                    { minHeight: transcriptViewportHeight || 140 },
-                    transcriptOverflow
-                      ? styles.detailTranscriptContentScrollable
-                      : styles.detailTranscriptContentCentered,
-                  ]}
-                >
-                  <Text style={styles.detailTranscript}>
-                    {entry.transcript || "No transcript available yet."}
-                  </Text>
-                </View>
-              </ScrollView>
-              <LinearGradient
-                colors={[DETAIL_PANEL, "rgba(27,27,27,0)"]}
-                pointerEvents="none"
-                style={[
-                  styles.detailTranscriptFade,
-                  styles.detailTranscriptFadeTop,
-                  !showTopFade && styles.detailTranscriptFadeSubtle,
-                ]}
-              />
-              <LinearGradient
-                colors={["rgba(27,27,27,0)", DETAIL_PANEL]}
-                pointerEvents="none"
-                style={[
-                  styles.detailTranscriptFade,
-                  styles.detailTranscriptFadeBottom,
-                  !showBottomFade && styles.detailTranscriptFadeSubtle,
-                ]}
-              />
-            </View>
-          {entry.actions && entry.actions.length > 0 ? (
             <ScrollView
+              bounces
               nestedScrollEnabled
               showsVerticalScrollIndicator={false}
-              style={styles.actionsScroll}
-              contentContainerStyle={styles.actionsScrollContent}
+              style={styles.detailBottomScroll}
+              contentContainerStyle={[
+                styles.detailBottomScrollContent,
+                { paddingBottom: Math.max(insets.bottom, 20) },
+              ]}
             >
+              <View style={styles.detailBottomStack}>
+              {isDemoVoiceEntry ? (
+                <View style={styles.demoDetailPanel}>
+                  <Text style={styles.demoDetailEyebrow}>Step 2 of 3</Text>
+                  <Text style={styles.demoDetailTitle}>This is the transcript Sunday generated</Text>
+                  <Text style={styles.demoDetailBody}>
+                    The text below is what Sunday heard from the voice note. The action cards show what it would have created or sent automatically.
+                  </Text>
+                  {onNavigateToToday ? (
+                    <Pressable
+                      onPress={() => {
+                        onClose();
+                        onNavigateToToday();
+                      }}
+                      style={styles.demoDetailButton}
+                    >
+                      <Text style={styles.demoDetailButtonText}>Next: open the created event in Today</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+              {entry.audioUri ? (
+                <View style={styles.detailControlsRow}>
+                  <Pressable onPress={handlePlayPausePress} style={styles.detailPlayButton}>
+                    {playbackStatus.playing ? <PauseCircleIcon size={34} /> : <PlayCircleIcon size={34} />}
+                  </Pressable>
+                  <View style={styles.detailProgressColumn}>
+                    <View
+                      onLayout={(event) => setProgressTrackWidth(event.nativeEvent.layout.width)}
+                      onMoveShouldSetResponder={() => true}
+                      onStartShouldSetResponder={() => true}
+                      onResponderGrant={(event) => handleScrubGrant(event.nativeEvent.locationX)}
+                      onResponderMove={(event) => updateScrubProgress(event.nativeEvent.locationX)}
+                      onResponderRelease={(event) => {
+                        void commitScrubProgress(event.nativeEvent.locationX);
+                      }}
+                      onResponderTerminate={(event) => {
+                        void commitScrubProgress(event.nativeEvent.locationX);
+                      }}
+                      style={styles.detailProgressTrack}
+                    >
+                      <Animated.View
+                        style={[
+                          styles.detailProgressFill,
+                          {
+                            width: progressAnimated.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, progressTrackWidth],
+                              extrapolate: "clamp",
+                            }),
+                          },
+                        ]}
+                      />
+                    </View>
+                    <View style={styles.detailProgressTimes}>
+                      <Text style={styles.detailTimeText}>
+                        {formatAudioTime(
+                          isScrubbing
+                            ? scrubProgressRef.current * playbackStatus.duration
+                            : playbackStatus.currentTime,
+                        )}
+                      </Text>
+                      <Text style={styles.detailTimeText}>
+                        {formatAudioTime(playbackStatus.duration)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.detailTranscriptSection}>
+                <Text style={styles.detailTranscript}>
+                  {entry.transcript || "No transcript available yet."}
+                </Text>
+              </View>
+            {entry.actions && entry.actions.length > 0 ? (
               <ActionCards actions={entry.actions} />
+            ) : null}
+            </View>
             </ScrollView>
-          ) : null}
-          </View>
           </View>
         </View>
       </SafeAreaView>
@@ -1088,10 +1041,16 @@ const styles = StyleSheet.create({
     marginTop: "auto",
     marginHorizontal: -20,
     paddingTop: 18,
-    paddingHorizontal: 18,
     backgroundColor: DETAIL_PANEL,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    overflow: "hidden",
+  },
+  detailBottomScroll: {
+    maxHeight: "100%",
+  },
+  detailBottomScrollContent: {
+    paddingHorizontal: 18,
   },
   detailBottomStack: {
     gap: 6,
@@ -1177,52 +1136,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.medium,
   },
-  detailTranscriptWrap: {
-    flex: 1,
-  },
-  detailTranscriptScrollContent: {
-    flexGrow: 1,
-  },
-  detailTranscriptContent: {
-    paddingVertical: 0,
-  },
-  detailTranscriptContentScrollable: {
-    justifyContent: "flex-start",
-    paddingTop: 14,
-  },
-  detailTranscriptContentCentered: {
-    justifyContent: "center",
-  },
-  detailTranscriptViewport: {
-    position: "relative",
-    height: 120,
-    overflow: "hidden",
-  },
-  detailTranscriptFade: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 24,
-  },
-  detailTranscriptFadeTop: {
-    top: 0,
-  },
-  detailTranscriptFadeBottom: {
-    bottom: 0,
-  },
-  detailTranscriptFadeSubtle: {
-    opacity: 0.9,
+  detailTranscriptSection: {
+    paddingTop: 8,
   },
   detailTranscript: {
     color: "#b8b8b8",
     fontSize: 17,
     lineHeight: 28,
     fontStyle: "italic",
-  },
-  actionsScroll: {
-    maxHeight: 220,
-  },
-  actionsScrollContent: {
-    paddingBottom: 8,
   },
 });
