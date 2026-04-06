@@ -19,7 +19,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
 import { TodayScreen } from "./src/screens/TodayScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { getAuthState, saveAuthState } from "./src/lib/auth";
+import { demoLogin, getAuthState, saveAuthState } from "./src/lib/auth";
 import {
   SettingsIcon,
   TodayIcon,
@@ -118,6 +118,7 @@ function RecordTabIcon({
 function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]; isDemo?: boolean }) {
   const insets = useSafeAreaInsets();
   const scrollRef = React.useRef<ScrollView>(null);
+  const initialPageAppliedRef = React.useRef(false);
   const activeIndexRef = React.useRef(INITIAL_INDEX);
   const scrollX = React.useRef(new Animated.Value(INITIAL_INDEX * SCREEN_WIDTH)).current;
   const navTranslateY = React.useRef(new Animated.Value(0)).current;
@@ -128,6 +129,26 @@ function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]
   React.useEffect(() => {
     activeIndexRef.current = activeIndex;
   }, [activeIndex]);
+
+  const applyInitialPage = React.useCallback(() => {
+    if (initialPageAppliedRef.current) {
+      return;
+    }
+    initialPageAppliedRef.current = true;
+    activeIndexRef.current = INITIAL_INDEX;
+    setActiveIndex(INITIAL_INDEX);
+    scrollX.setValue(INITIAL_INDEX * SCREEN_WIDTH);
+    scrollRef.current?.scrollTo({ x: INITIAL_INDEX * SCREEN_WIDTH, animated: false });
+  }, [scrollX]);
+
+  React.useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        applyInitialPage();
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [applyInitialPage]);
 
   // Web-only: passive window-level pointer listener for horizontal swipe navigation.
   // Native iOS handles this automatically via the pagingEnabled horizontal ScrollView.
@@ -362,12 +383,17 @@ function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]
 
       // Merge demo seed entries (deduped by id)
       const merged =
-        seedEntries.length > 0
+        isDemo && seedEntries.length > 0
           ? [
-              ...seedEntries.filter((s) => !storedEntries.some((e) => e.id === s.id)),
-              ...storedEntries,
+              ...seedEntries,
+              ...storedEntries.filter((entry) => !entry.id.startsWith("demo-")),
             ]
-          : storedEntries;
+          : seedEntries.length > 0
+            ? [
+                ...seedEntries.filter((s) => !storedEntries.some((e) => e.id === s.id)),
+                ...storedEntries,
+              ]
+            : storedEntries;
 
       setAlertEntries(merged);
       setEntriesHydrated(true);
@@ -378,7 +404,7 @@ function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [isDemo, seedEntries]);
 
   React.useEffect(() => {
     if (!entriesHydrated) {
@@ -472,6 +498,7 @@ function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]
         )}
         onScrollBeginDrag={() => Keyboard.dismiss()}
         onMomentumScrollEnd={handleMomentumEnd}
+        onLayout={applyInitialPage}
         contentOffset={{ x: INITIAL_INDEX * SCREEN_WIDTH, y: 0 }}
       >
         <View style={styles.page}><SettingsScreen /></View>
@@ -584,9 +611,24 @@ export default function App() {
 
   React.useEffect(() => {
     getAuthState()
-      .then((state) => {
+      .then(async (state) => {
+        if (state?.isDemo) {
+          setIsDemo(true);
+          try {
+            const res = await demoLogin();
+            await saveAuthState(res.token, true);
+            setSeedEntries((res.demo_entries ?? []) as AlertEntry[]);
+          } catch (error) {
+            console.warn(
+              "[sunday] failed to refresh demo entries",
+              error instanceof Error ? error.message : error,
+            );
+          }
+        } else {
+          setIsDemo(false);
+          setSeedEntries([]);
+        }
         setAuthed(!!state);
-        setIsDemo(state?.isDemo ?? false);
       })
       .catch(() => {
         // Auth check failed — show login screen
