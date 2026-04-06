@@ -3,6 +3,7 @@ import { fetchApi } from "./api";
 
 const API_TOKEN = (process.env.EXPO_PUBLIC_API_TOKEN ?? "").trim();
 const TRANSCRIPTION_REQUEST_TIMEOUT_MS = 60000;
+const TOO_SHORT_RECORDING_MESSAGE = "Recording was too short. Hold the button a little longer and try again.";
 
 type TranscriptionResponse = {
   text?: string;
@@ -117,6 +118,21 @@ function parseActions(raw: TranscriptionResponse["actions"]): ActionItem[] | und
   return items.length > 0 ? items : undefined;
 }
 
+function normalizeTranscriptionErrorMessage(message: string) {
+  const trimmed = message.trim();
+  const lowered = trimmed.toLowerCase();
+
+  if (
+    lowered.includes("audio file is too short")
+    || lowered.includes("minimum audio length")
+    || lowered.includes("file is empty")
+  ) {
+    return TOO_SHORT_RECORDING_MESSAGE;
+  }
+
+  return trimmed;
+}
+
 export async function uploadRecordingForTranscription(uri: string): Promise<TranscriptionResult> {
   const fileName = uri.split("/").pop() ?? "recording.m4a";
   const formData = new FormData();
@@ -142,7 +158,11 @@ export async function uploadRecordingForTranscription(uri: string): Promise<Tran
 
   const payload = (await response.json().catch(() => ({}))) as TranscriptionResponse;
   if (!response.ok) {
-    throw new Error(payload.detail || `Transcription failed with status ${response.status}.`);
+    throw new Error(
+      normalizeTranscriptionErrorMessage(
+        payload.detail || `Transcription failed with status ${response.status}.`,
+      ),
+    );
   }
 
   const text = payload.text?.trim();
@@ -178,7 +198,11 @@ export async function uploadBlobForTranscription(blob: Blob): Promise<Transcript
 
   const payload = (await response.json().catch(() => ({}))) as TranscriptionResponse;
   if (!response.ok) {
-    throw new Error(payload.detail || `Transcription failed with status ${response.status}.`);
+    throw new Error(
+      normalizeTranscriptionErrorMessage(
+        payload.detail || `Transcription failed with status ${response.status}.`,
+      ),
+    );
   }
 
   const text = payload.text?.trim();

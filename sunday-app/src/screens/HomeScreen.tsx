@@ -17,7 +17,8 @@ import { uploadRecordingForTranscription, uploadBlobForTranscription } from "../
 const BACKGROUND = "#121212";
 const DOT_SIZE = Platform.OS === "web" ? 200 : 180;
 const RECORDING = "#eb4034";
-const MIN_RECORDING_DURATION_MILLIS = 700;
+const MIN_RECORDING_DURATION_MILLIS = 1000;
+const TOO_SHORT_RECORDING_MESSAGE = "Recording was too short. Hold the button a little longer and try again.";
 
 type HomeScreenProps = {
   onBackgroundPress?: () => void;
@@ -92,6 +93,8 @@ export function HomeScreen({
 
       if (result.durationMillis < MIN_RECORDING_DURATION_MILLIS) {
         console.log(`[sunday] recording ignored (${result.durationMillis}ms too short)`);
+        const entryId = onTranscriptPending?.("") ?? `${Date.now()}`;
+        onTranscriptError?.(entryId, TOO_SHORT_RECORDING_MESSAGE);
         return;
       }
 
@@ -117,10 +120,13 @@ export function HomeScreen({
       void transcribeRecording(entryId, source);
     } catch (error) {
       console.error("[sunday] failed to stop recording", error);
+      const message = error instanceof Error ? error.message : "Failed to stop recording.";
+      const entryId = onTranscriptPending?.("") ?? `${Date.now()}`;
+      onTranscriptError?.(entryId, message);
     } finally {
       setIsTogglingRecording(false);
     }
-  }, [onTranscriptPending, recorder, transcribeRecording]);
+  }, [onTranscriptError, onTranscriptPending, recorder, transcribeRecording]);
 
   const handleDotPress = React.useCallback(
     async (event?: GestureResponderEvent) => {

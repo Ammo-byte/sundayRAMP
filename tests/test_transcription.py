@@ -56,3 +56,28 @@ def test_transcribe_audio_file_raises_when_model_is_missing(tmp_path, monkeypatc
 
     with pytest.raises(TranscriptionError, match="Speech model not found"):
         transcribe_audio_file(audio_path)
+
+
+def test_transcribe_audio_file_normalizes_groq_short_audio_error(tmp_path, monkeypatch):
+    audio_path = tmp_path / "input.m4a"
+    audio_path.write_bytes(b"tiny-audio")
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    class DummyResponse:
+        status_code = 400
+        text = (
+            '{"error":{"message":"Audio file is too short. Minimum audio length is 0.01 seconds.",'
+            '"type":"invalid_request_error"}}'
+        )
+
+        @staticmethod
+        def json():
+            return {}
+
+    monkeypatch.setattr(transcription.httpx, "post", lambda *args, **kwargs: DummyResponse())
+
+    with pytest.raises(
+        TranscriptionError,
+        match="Recording was too short. Hold the button a little longer and try again.",
+    ):
+        transcribe_audio_file(audio_path)

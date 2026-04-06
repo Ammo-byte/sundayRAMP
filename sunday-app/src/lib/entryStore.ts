@@ -4,6 +4,9 @@ import { AlertEntry } from "./alertEntries";
 
 const ALERT_ENTRIES_KEY = "sunday.alertEntries.v1";
 const PENDING_RELOAD_MESSAGE = "The app reloaded before transcription finished.";
+const RECORDING_FILE_READY_TIMEOUT_MS = 2500;
+const RECORDING_FILE_READY_POLL_MS = 120;
+const MIN_READY_RECORDING_BYTES = 1024;
 
 function normalizeLoadedAudioUri(audioUri?: string | null) {
   if (typeof audioUri !== "string") {
@@ -30,8 +33,45 @@ function getFileExtension(uri: string) {
   return lastDot === -1 ? ".m4a" : path.slice(lastDot);
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForNativeRecordingFile(sourceUri: string) {
+  const { File } = await import("expo-file-system");
+  const deadline = Date.now() + RECORDING_FILE_READY_TIMEOUT_MS;
+  let previousSize = -1;
+  let stableCount = 0;
+
+  while (Date.now() < deadline) {
+    const sourceFile = new File(sourceUri);
+    const size = sourceFile.size;
+    if (sourceFile.exists && size > MIN_READY_RECORDING_BYTES) {
+      stableCount = size === previousSize ? stableCount + 1 : 1;
+      previousSize = size;
+      if (stableCount >= 2) {
+        return sourceFile;
+      }
+    } else {
+      previousSize = size;
+      stableCount = 0;
+    }
+    await wait(RECORDING_FILE_READY_POLL_MS);
+  }
+
+  const sourceFile = new File(sourceUri);
+  if (sourceFile.exists && sourceFile.size > MIN_READY_RECORDING_BYTES) {
+    return sourceFile;
+  }
+  if (sourceFile.exists && sourceFile.size > 0) {
+    throw new Error("Recording was too short. Hold the button a little longer and try again.");
+  }
+  throw new Error("Recording file was not ready. Please try again.");
+}
+
 async function nativePersistRecordingFile(sourceUri: string): Promise<string> {
   const { Directory, File, Paths } = await import("expo-file-system");
+  const sourceFile = await waitForNativeRecordingFile(sourceUri);
   const recordingsDir = new Directory(Paths.document, "recordings");
   if (!recordingsDir.exists) {
     recordingsDir.create({ idempotent: true, intermediates: true });
@@ -40,7 +80,7 @@ async function nativePersistRecordingFile(sourceUri: string): Promise<string> {
     recordingsDir,
     `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${getFileExtension(sourceUri)}`,
   );
-  new File(sourceUri).copy(dest);
+  sourceFile.copy(dest);
   return dest.uri;
 }
 

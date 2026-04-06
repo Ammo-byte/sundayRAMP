@@ -19,6 +19,16 @@ def _normalize_transcript(text: str) -> str:
     return " ".join(parts).strip()
 
 
+def _friendly_transcription_error(detail: str) -> str:
+    message = detail.strip()
+    lowered = message.lower()
+
+    if "file is empty" in lowered or "audio file is too short" in lowered or "too short" in lowered:
+        return "Recording was too short. Hold the button a little longer and try again."
+
+    return message
+
+
 # ── Groq Whisper API (cloud, no model file needed) ────────────────────────────
 
 def _transcribe_via_groq(source: Path) -> str:
@@ -26,6 +36,13 @@ def _transcribe_via_groq(source: Path) -> str:
     api_key = os.getenv("GROQ_API_KEY", "")
     if not api_key:
         raise TranscriptionError("GROQ_API_KEY is not set.")
+
+    try:
+        size = source.stat().st_size
+    except OSError as exc:
+        raise TranscriptionError(f"Could not read recording: {source}") from exc
+    if size <= 0:
+        raise TranscriptionError("Recorded audio was empty. Please try again.")
 
     with open(source, "rb") as f:
         audio_bytes = f.read()
@@ -47,7 +64,7 @@ def _transcribe_via_groq(source: Path) -> str:
     )
 
     if response.status_code != 200:
-        raise TranscriptionError(f"Groq transcription failed: {response.text}")
+        raise TranscriptionError(_friendly_transcription_error(response.text))
 
     text = response.json().get("text", "").strip()
     if not text:
