@@ -2005,6 +2005,9 @@ export function SettingsScreen() {
                             thumbColor={isPhoneLocationEnabled ? "#ffffff" : "#d6d6d6"}
                           />
                         </View>
+                        {isPhoneLocationEnabled && phoneLocationLabel ? (
+                          <Text style={styles.phoneLocationLabel}>{phoneLocationLabel}</Text>
+                        ) : null}
                       </View>
                     </>
                   )
@@ -2020,6 +2023,7 @@ export function SettingsScreen() {
       handleCalendarIdChange,
       handlePhoneLocationToggle,
       isPhoneLocationEnabled,
+      phoneLocationLabel,
       settings.MESSAGE_CHANNEL,
       renderSectionHeader,
       renderFieldRow,
@@ -2882,7 +2886,8 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontFamily: FONTS.regular,
     fontSize: 13,
-    textAlign: "center",
+    marginTop: 6,
+    paddingHorizontal: 2,
   },
   nativePickerField: {
     borderRadius: 14,
