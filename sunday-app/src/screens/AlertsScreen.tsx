@@ -327,6 +327,7 @@ function DemoWalkthroughPanel() {
 function EntryDetailModal({ entry, isDemo = false, onClose, onNavigateToToday }: EntryDetailModalProps) {
   const insets = useSafeAreaInsets();
   const progressAnimated = React.useRef(new Animated.Value(0)).current;
+  const demoNextPulse = React.useRef(new Animated.Value(0)).current;
   const scrubProgressRef = React.useRef(0);
   const player = useAudioPlayer(entry.audioUri ? { uri: entry.audioUri } : null, {
     updateInterval: 50,
@@ -339,6 +340,7 @@ function EntryDetailModal({ entry, isDemo = false, onClose, onNavigateToToday }:
   const [progressTrackWidth, setProgressTrackWidth] = React.useState(0);
   const [isScrubbing, setIsScrubbing] = React.useState(false);
   const isDemoVoiceEntry = isDemo && entry.id === DEMO_VOICE_ENTRY_ID;
+  const [isDemoNextHighlighted, setIsDemoNextHighlighted] = React.useState(false);
 
   React.useEffect(() => {
     if (isScrubbing) {
@@ -363,6 +365,52 @@ function EntryDetailModal({ entry, isDemo = false, onClose, onNavigateToToday }:
     progressAnimated.setValue(0);
     void player.seekTo(0).catch(() => undefined);
   }, [entry.audioUri, playbackStatus.didJustFinish, player, progressAnimated]);
+
+  React.useEffect(() => {
+    setIsDemoNextHighlighted(false);
+    demoNextPulse.stopAnimation();
+    demoNextPulse.setValue(0);
+
+    if (!isDemoVoiceEntry || !onNavigateToToday) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setIsDemoNextHighlighted(true);
+    }, COACH_HIGHLIGHT_DELAY_MS);
+
+    return () => clearTimeout(timeout);
+  }, [demoNextPulse, isDemoVoiceEntry, onNavigateToToday]);
+
+  React.useEffect(() => {
+    if (!isDemoNextHighlighted) {
+      demoNextPulse.stopAnimation();
+      demoNextPulse.setValue(0);
+      return;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(demoNextPulse, {
+          toValue: 1,
+          duration: 850,
+          useNativeDriver: false,
+        }),
+        Animated.timing(demoNextPulse, {
+          toValue: 0,
+          duration: 850,
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+
+    animation.start();
+    return () => {
+      animation.stop();
+      demoNextPulse.stopAnimation();
+      demoNextPulse.setValue(0);
+    };
+  }, [demoNextPulse, isDemoNextHighlighted]);
 
   const updateScrubProgress = React.useCallback((locationX: number) => {
     if (!progressTrackWidth) {
@@ -485,15 +533,42 @@ function EntryDetailModal({ entry, isDemo = false, onClose, onNavigateToToday }:
                     The text below is what Sunday heard from the voice note. The action cards show what it would have created or sent automatically.
                   </Text>
                   {onNavigateToToday ? (
-                    <Pressable
-                      onPress={() => {
-                        onClose();
-                        onNavigateToToday();
-                      }}
-                      style={styles.demoDetailButton}
-                    >
-                      <Text style={styles.demoDetailButtonText}>Next: open the created event in Today</Text>
-                    </Pressable>
+                    <View style={styles.demoDetailButtonWrap}>
+                      {isDemoNextHighlighted ? (
+                        <Animated.View
+                          pointerEvents="none"
+                          style={[
+                            styles.demoDetailButtonHalo,
+                            {
+                              opacity: demoNextPulse.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0.35, 0.85],
+                              }),
+                              transform: [
+                                {
+                                  scale: demoNextPulse.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [1, 1.08],
+                                  }),
+                                },
+                              ],
+                            },
+                          ]}
+                        />
+                      ) : null}
+                      <Pressable
+                        onPress={() => {
+                          onClose();
+                          onNavigateToToday();
+                        }}
+                        style={styles.demoDetailButton}
+                      >
+                        <Text style={styles.demoDetailButtonText}>Next: open the created event in Today</Text>
+                      </Pressable>
+                      {isDemoNextHighlighted ? (
+                        <Text style={styles.demoDetailButtonHint}>Tap here</Text>
+                      ) : null}
+                    </View>
                   ) : null}
                 </View>
               ) : null}
@@ -1084,9 +1159,27 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: FONTS.regular,
   },
-  demoDetailButton: {
+  demoDetailButtonWrap: {
     marginTop: 4,
     alignSelf: "flex-start",
+    position: "relative",
+    alignItems: "flex-start",
+  },
+  demoDetailButtonHalo: {
+    position: "absolute",
+    top: -6,
+    left: -6,
+    right: -6,
+    bottom: 18,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "#8ab4ff",
+    shadowColor: "#8ab4ff",
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  demoDetailButton: {
     borderRadius: 999,
     backgroundColor: "#ffffff",
     paddingHorizontal: 14,
@@ -1095,6 +1188,12 @@ const styles = StyleSheet.create({
   demoDetailButtonText: {
     color: "#121212",
     fontSize: 13,
+    fontFamily: FONTS.semibold,
+  },
+  demoDetailButtonHint: {
+    marginTop: 8,
+    color: "#8ab4ff",
+    fontSize: 12,
     fontFamily: FONTS.semibold,
   },
   detailControlsRow: {
