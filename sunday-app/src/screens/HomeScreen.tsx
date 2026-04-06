@@ -1,13 +1,7 @@
 import React from "react";
 import {
-  RecordingPresets,
-  requestRecordingPermissionsAsync,
-  setAudioModeAsync,
-  useAudioRecorder,
-  useAudioRecorderState,
-} from "expo-audio";
-import {
   Animated,
+  Platform,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -15,9 +9,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRecorder } from "../lib/recorder";
 import { ActionItem } from "../lib/alertEntries";
 import { persistRecordingFile } from "../lib/entryStore";
-import { uploadRecordingForTranscription } from "../lib/transcription";
+import { uploadRecordingForTranscription, uploadBlobForTranscription } from "../lib/transcription";
 
 const BACKGROUND = "#121212";
 const DOT_SIZE = "50%";
@@ -39,71 +34,52 @@ export function HomeScreen({
   onTranscriptError,
   onRecordingChange,
 }: HomeScreenProps) {
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder, 200);
+  const recorder = useRecorder();
   const [isTogglingRecording, setIsTogglingRecording] = React.useState(false);
-  const recordingStartedAtRef = React.useRef<number | null>(null);
   const scale = React.useRef(new Animated.Value(1)).current;
-  const isRecording = recorderState.isRecording;
+  const isRecording = recorder.state.isRecording;
 
   React.useEffect(() => {
     onRecordingChange?.(isRecording);
   }, [isRecording, onRecordingChange]);
 
-  const handleBackgroundPress = React.useCallback(() => {
-    onBackgroundPress?.();
-  }, [onBackgroundPress]);
-
   const pulseDot = React.useCallback(() => {
     scale.stopAnimation(() => {
       scale.setValue(1);
       Animated.sequence([
-        Animated.timing(scale, {
-          toValue: 1.15,
-          duration: 80,
-          useNativeDriver: false,
-        }),
-        Animated.spring(scale, {
-          toValue: 1,
-          speed: 50,
-          bounciness: 10,
-          useNativeDriver: false,
-        }),
+        Animated.timing(scale, { toValue: 1.15, duration: 80, useNativeDriver: false }),
+        Animated.spring(scale, { toValue: 1, speed: 50, bounciness: 10, useNativeDriver: false }),
       ]).start();
     });
   }, [scale]);
 
-  const transcribeRecording = React.useCallback(async (entryId: string, recordingUrl: string) => {
-    try {
-      console.log("[sunday] uploading recording for transcription");
-      const result = await uploadRecordingForTranscription(recordingUrl);
-      console.log("[sunday] transcript:", result.text);
-      console.log("[sunday] transcript title:", result.summary);
-      onTranscript?.(entryId, result.text, result.summary, result.actions);
-    } catch (error) {
-      console.error("[sunday] transcription failed", error);
-      const message = error instanceof Error ? error.message : "Transcription failed.";
-      onTranscriptError?.(entryId, message);
-    }
-  }, [onTranscript, onTranscriptError]);
+  const transcribeRecording = React.useCallback(
+    async (entryId: string, source: string | Blob) => {
+      try {
+        console.log("[sunday] uploading recording for transcription");
+        const result =
+          typeof source === "string"
+            ? await uploadRecordingForTranscription(source)
+            : await uploadBlobForTranscription(source);
+        console.log("[sunday] transcript:", result.text);
+        console.log("[sunday] transcript title:", result.summary);
+        onTranscript?.(entryId, result.text, result.summary, result.actions);
+      } catch (error) {
+        console.error("[sunday] transcription failed", error);
+        const message = error instanceof Error ? error.message : "Transcription failed.";
+        onTranscriptError?.(entryId, message);
+      }
+    },
+    [onTranscript, onTranscriptError],
+  );
 
   const startRecording = React.useCallback(async () => {
     setIsTogglingRecording(true);
     try {
-      const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) {
-        console.warn("[sunday] microphone permission was denied");
-        return;
-      }
-
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-      });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      recordingStartedAtRef.current = Date.now();
+      await recorder.start();
       console.log("[sunday] recording started");
+    } catch (error) {
+      console.warn("[sunday] could not start recording", error);
     } finally {
       setIsTogglingRecording(false);
     }
@@ -112,72 +88,56 @@ export function HomeScreen({
   const stopRecording = React.useCallback(async () => {
     setIsTogglingRecording(true);
     try {
-      const liveStatus = recorder.getStatus();
-      const wallClockDurationMillis = recordingStartedAtRef.current
-        ? Math.max(0, Date.now() - recordingStartedAtRef.current)
-        : 0;
-      const liveDurationMillis = Math.max(
-        recorderState.durationMillis ?? 0,
-        liveStatus.durationMillis ?? 0,
-        wallClockDurationMillis,
-      );
-      await recorder.stop();
-      await setAudioModeAsync({
-        allowsRecording: false,
-      });
-      const finalStatus = recorder.getStatus();
-      const durationMillis = Math.max(
-        liveDurationMillis,
-        finalStatus.durationMillis ?? 0,
-      );
-      recordingStartedAtRef.current = null;
-      if (durationMillis < MIN_RECORDING_DURATION_MILLIS) {
-        console.log(
-          `[sunday] recording ignored (${durationMillis}ms is below ${MIN_RECORDING_DURATION_MILLIS}ms)`,
-        );
+      const result = await recorder.stop();
+
+      if (result.durationMillis < MIN_RECORDING_DURATION_MILLIS) {
+        console.log(`[sunday] recording ignored (${result.durationMillis}ms too short)`);
         return;
       }
-      const recordingUrl = recorder.uri ?? recorder.getStatus().url ?? recorderState.url;
-      if (!recordingUrl) {
-        throw new Error("No recording file was produced.");
+
+      let source: string | Blob;
+      let labelUri: string;
+
+      if (result.blob) {
+        // Web: upload blob directly, skip file system
+        source = result.blob;
+        labelUri = `web-${Date.now()}`;
+      } else {
+        // Native: persist to file system first
+        const persisted = await persistRecordingFile(result.uri);
+        source = persisted;
+        labelUri = persisted;
       }
 
-      const persistedRecordingUrl = await persistRecordingFile(recordingUrl);
       console.log("[sunday] recording stopped");
-      const entryId = onTranscriptPending?.(persistedRecordingUrl);
-      if (entryId) {
-        void transcribeRecording(entryId, persistedRecordingUrl);
-      } else {
-        void transcribeRecording(`${Date.now()}`, persistedRecordingUrl);
-      }
+      const entryId = onTranscriptPending?.(labelUri) ?? `${Date.now()}`;
+      void transcribeRecording(entryId, source);
     } catch (error) {
       console.error("[sunday] failed to stop recording", error);
     } finally {
-      recordingStartedAtRef.current = null;
       setIsTogglingRecording(false);
     }
-  }, [onTranscriptPending, recorder, recorderState.durationMillis, recorderState.url, transcribeRecording]);
+  }, [onTranscriptPending, recorder, transcribeRecording]);
 
-  const handleDotPress = React.useCallback(async (event?: GestureResponderEvent) => {
-    event?.stopPropagation?.();
-    if (isTogglingRecording) {
-      return;
-    }
-
-    pulseDot();
-    if (isRecording) {
-      await stopRecording();
-      return;
-    }
-
-    await startRecording();
-  }, [isRecording, isTogglingRecording, pulseDot, startRecording, stopRecording]);
+  const handleDotPress = React.useCallback(
+    async (event?: GestureResponderEvent) => {
+      event?.stopPropagation?.();
+      if (isTogglingRecording) return;
+      pulseDot();
+      if (isRecording) {
+        await stopRecording();
+      } else {
+        await startRecording();
+      }
+    },
+    [isRecording, isTogglingRecording, pulseDot, startRecording, stopRecording],
+  );
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" />
+      {Platform.OS !== "web" && <StatusBar barStyle="light-content" />}
       <View style={styles.container}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleBackgroundPress} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onBackgroundPress} />
         <Pressable onPress={handleDotPress} style={styles.centerDotTapTarget}>
           <Animated.View
             style={[

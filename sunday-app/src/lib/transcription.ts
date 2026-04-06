@@ -138,3 +138,36 @@ export async function uploadRecordingForTranscription(uri: string): Promise<Tran
 
   return { text, summary, actions };
 }
+
+export async function uploadBlobForTranscription(blob: Blob): Promise<TranscriptionResult> {
+  const ext = blob.type.includes("ogg") ? "ogg" : "webm";
+  const formData = new FormData();
+  formData.append("file", blob, `recording.${ext}`);
+
+  const headers: Record<string, string> = {};
+  if (API_TOKEN) {
+    headers.authorization = `Bearer ${API_TOKEN}`;
+  }
+
+  const response = await fetchApi(
+    "/api/transcribe",
+    { method: "POST", headers, body: formData },
+    { timeoutMs: TRANSCRIPTION_REQUEST_TIMEOUT_MS },
+  );
+
+  const payload = (await response.json().catch(() => ({}))) as TranscriptionResponse;
+  if (!response.ok) {
+    throw new Error(payload.detail || `Transcription failed with status ${response.status}.`);
+  }
+
+  const text = payload.text?.trim();
+  if (!text) {
+    throw new Error("Backend returned an empty transcript.");
+  }
+
+  return {
+    text,
+    summary: payload.summary?.trim() || "Untitled Voice Note",
+    actions: parseActions(payload.actions),
+  };
+}

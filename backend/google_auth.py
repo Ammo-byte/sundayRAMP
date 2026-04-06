@@ -101,6 +101,23 @@ def _save_token(creds: Credentials) -> None:
         log.warning("Could not save token to disk: %s", exc)
 
 
+def is_google_connected() -> bool:
+    """Return True if a valid (or refreshable) Google token exists."""
+    creds = _load_token()
+    if creds is None:
+        return False
+    if creds.valid:
+        return True
+    if creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+            _save_token(creds)
+            return True
+        except Exception:
+            return False
+    return False
+
+
 def get_google_service(service_name: str, version: str):
     """
     Authenticate with Google and return an API service client.

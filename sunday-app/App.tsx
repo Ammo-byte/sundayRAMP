@@ -18,6 +18,8 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
 import { TodayScreen } from "./src/screens/TodayScreen";
+import { AuthScreen } from "./src/screens/AuthScreen";
+import { getAuthState, saveAuthState } from "./src/lib/auth";
 import {
   SettingsIcon,
   TodayIcon,
@@ -113,7 +115,7 @@ function RecordTabIcon({
   );
 }
 
-function Main() {
+function Main({ seedEntries = [] }: { seedEntries?: AlertEntry[] }) {
   const insets = useSafeAreaInsets();
   const scrollRef = React.useRef<ScrollView>(null);
   const scrollX = React.useRef(new Animated.Value(INITIAL_INDEX * SCREEN_WIDTH)).current;
@@ -326,7 +328,16 @@ function Main() {
         return;
       }
 
-      setAlertEntries(storedEntries);
+      // Merge demo seed entries (deduped by id)
+      const merged =
+        seedEntries.length > 0
+          ? [
+              ...seedEntries.filter((s) => !storedEntries.some((e) => e.id === s.id)),
+              ...storedEntries,
+            ]
+          : storedEntries;
+
+      setAlertEntries(merged);
       setEntriesHydrated(true);
     };
 
@@ -534,14 +545,36 @@ export default function App() {
     "GoogleSans-Bold": require("./assets/fonts/GoogleSans-Bold.ttf"),
   });
 
-  if (!fontsLoaded) {
+  const [authChecked, setAuthChecked] = React.useState(false);
+  const [authed, setAuthed] = React.useState(false);
+  const [seedEntries, setSeedEntries] = React.useState<AlertEntry[]>([]);
+
+  React.useEffect(() => {
+    getAuthState().then((state) => {
+      setAuthed(!!state);
+      setAuthChecked(true);
+    });
+  }, []);
+
+  const handleAuth = React.useCallback(
+    async (token: string, isDemo: boolean, demoEntries?: object[]) => {
+      await saveAuthState(token, isDemo);
+      if (isDemo && demoEntries?.length) {
+        setSeedEntries(demoEntries as AlertEntry[]);
+      }
+      setAuthed(true);
+    },
+    [],
+  );
+
+  if (!fontsLoaded || !authChecked) {
     return null;
   }
 
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
       <SafeAreaProvider>
-        <Main />
+        {authed ? <Main seedEntries={seedEntries} /> : <AuthScreen onAuth={handleAuth} />}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

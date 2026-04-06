@@ -22,10 +22,16 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
+import jwt as pyjwt
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from .app_settings import get_app_settings, update_app_settings
+from .auth import create_token, decode_token, hash_password, verify_password
+from .database import DEMO_USER_ID, create_user, get_user_by_email, get_user_by_id, init_db
+from .demo_data import DEMO_ALERT_ENTRIES, DEMO_EVENTS, DEMO_STATUS
 from .action_center_store import (
     append_action_center_entries_from_pipeline_results,
     get_recent_action_center_entries,
@@ -77,11 +83,43 @@ _NEAR_RE = re.compile(r"\bnear\s+([a-zA-Z][a-zA-Z\s\-]{1,40})")
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
-async def _require_auth(request: Request) -> None:
-    """FastAPI dependency: enforce CRON_SECRET bearer token when configured."""
-    secret = os.environ.get("CRON_SECRET", "")
-    if secret and request.headers.get("authorization") != f"Bearer {secret}":
+def _extract_user(request: Request) -> dict | None:
+    """Extract user payload from JWT, or None for server/legacy tokens."""
+    header = request.headers.get("authorization", "")
+    if not header.startswith("Bearer "):
+        return None
+    token = header.removeprefix("Bearer ").strip()
+
+    # Legacy CRON_SECRET / SUNDAY_API_KEY (server-to-server)
+    for env_key in ("CRON_SECRET", "SUNDAY_API_KEY"):
+        secret = os.environ.get(env_key, "")
+        if secret and token == secret:
+            return None  # authorized, but no user context
+
+    # JWT (app users)
+    try:
+        return decode_token(token)
+    except pyjwt.InvalidTokenError:
+        return None
+
+
+async def _require_auth(request: Request) -> dict | None:
+    """FastAPI dependency: require a valid JWT or server token."""
+    header = request.headers.get("authorization", "")
+
+    # No auth configured at all → open (local dev)
+    cron_secret = os.environ.get("CRON_SECRET", "")
+    sunday_key = os.environ.get("SUNDAY_API_KEY", "")
+    if not cron_secret and not sunday_key:
+        return None
+
+    user = _extract_user(request)
+    if user is None and header:
+        # Had a token but it was invalid
         raise HTTPException(status_code=401, detail="Unauthorized")
+    if user is None and not header:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -90,6 +128,7 @@ async def _require_auth(request: Request) -> None:
 async def lifespan(app: FastAPI):
     """Log startup validation so deployment issues are visible immediately."""
     del app
+    init_db()
     report = Config.validation_report()
     for error in report["errors"]:
         log.error("CONFIG: %s", error)
@@ -128,6 +167,106 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ── Auth endpoints ────────────────────────────────────────────────────────────
+
+class AuthRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    demo: bool = False
+    demo_entries: list = []
+
+
+@app.post("/auth/signup", response_model=AuthResponse)
+async def signup(body: AuthRequest):
+    if len(body.password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters.")
+    existing = get_user_by_email(body.email)
+    if existing:
+        raise HTTPException(status_code=409, detail="An account with that email already exists.")
+    try:
+        user_id = create_user(body.email, hash_password(body.password))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return AuthResponse(token=create_token(user_id))
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+async def login(body: AuthRequest):
+    user = get_user_by_email(body.email)
+    if not user or not user["password"] or not verify_password(body.password, user["password"]):
+        raise HTTPException(status_code=401, detail="Incorrect email or password.")
+    return AuthResponse(token=create_token(user["id"], is_demo=bool(user["is_demo"])))
+
+
+@app.post("/auth/demo", response_model=AuthResponse)
+async def demo_login():
+    return AuthResponse(
+        token=create_token(DEMO_USER_ID, is_demo=True),
+        demo=True,
+        demo_entries=DEMO_ALERT_ENTRIES,
+    )
+
+
+# ── Google OAuth web flow ─────────────────────────────────────────────────────
+
+_pending_oauth_states: dict[str, str] = {}  # state → redirect_uri
+
+
+@app.get("/auth/google")
+async def google_auth_start(request: Request):
+    """Redirect the browser to Google's consent screen."""
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from .google_auth import SCOPES, _load_credentials_file
+        redirect_uri = str(request.url_for("google_auth_callback"))
+        flow = Flow.from_client_secrets_file(
+            str(_load_credentials_file()), scopes=SCOPES, redirect_uri=redirect_uri
+        )
+        auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
+        _pending_oauth_states[state] = redirect_uri
+        return RedirectResponse(auth_url)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not start Google OAuth: {exc}") from exc
+
+
+@app.get("/auth/google/callback", name="google_auth_callback")
+async def google_auth_callback(request: Request, code: str, state: str):
+    """Receive the OAuth code, save the token, show success page."""
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from .google_auth import SCOPES, _load_credentials_file, _save_token
+        redirect_uri = _pending_oauth_states.pop(state, str(request.url_for("google_auth_callback")))
+        flow = Flow.from_client_secrets_file(
+            str(_load_credentials_file()), scopes=SCOPES, state=state, redirect_uri=redirect_uri
+        )
+        flow.fetch_token(code=code)
+        _save_token(flow.credentials)
+    except Exception as exc:
+        return HTMLResponse(
+            f"<html><body style='font-family:sans-serif;background:#121212;color:white;text-align:center;padding:60px'>"
+            f"<h2>Error connecting Google</h2><p>{exc}</p></body></html>",
+            status_code=400,
+        )
+    return HTMLResponse(
+        "<html><head><title>Connected</title></head>"
+        "<body style='font-family:sans-serif;background:#121212;color:white;text-align:center;padding:60px'>"
+        "<h2 style='font-size:2rem'>✓ Google account connected</h2>"
+        "<p style='color:#aaa'>You can return to the Sunday app now.</p>"
+        "</body></html>"
+    )
 
 
 # ── Request / response models ─────────────────────────────────────────────────
@@ -953,8 +1092,13 @@ async def health():
 
 
 @app.get("/api/status")
-async def status():
+async def status(request: Request):
     """Return current configuration status without exposing secrets."""
+    user = _extract_user(request)
+    if user and user.get("demo"):
+        return DEMO_STATUS
+
+    from .google_auth import is_google_connected
     report = Config.validation_report()
     return {
         "ready": not report["errors"],
@@ -970,6 +1114,7 @@ async def status():
         ),
         "maps_configured": bool(Config.google_maps_key),
         "expo_push_enabled": Config.expo_push_enabled,
+        "google_connected": is_google_connected(),
         "errors": report["errors"],
         "warnings": report["warnings"],
     }
@@ -1125,9 +1270,12 @@ def _action_center_entry_from_pipeline_result(result: dict) -> dict | None:
     return action_center_entry_from_pipeline_result(result)
 
 
-@app.get("/api/events", dependencies=[Depends(_require_auth)])
-async def get_events():
+@app.get("/api/events")
+async def get_events(request: Request, _auth=Depends(_require_auth)):
     """Return upcoming calendar events (next 48h) with multi-mode travel times."""
+    user = _extract_user(request)
+    if user and user.get("demo"):
+        return DEMO_EVENTS
     try:
         calendar = CalendarManager()
         now = datetime.now(timezone.utc)

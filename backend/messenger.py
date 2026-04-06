@@ -429,12 +429,45 @@ def format_summary(
     return "\n".join(lines)
 
 
+_TRAVEL_MODE_ICON = {
+    "driving": "🚗",
+    "walking": "🚶",
+    "bicycling": "🚴",
+    "transit": "🚌",
+}
+
+_TRAVEL_MODE_PHRASE = {
+    "driving": "drive",
+    "walking": "walk",
+    "bicycling": "bike",
+    "transit": "commute",
+}
+
+
+def _format_travel_line(calendar_event: dict) -> str | None:
+    private = (calendar_event.get("extendedProperties") or {}).get("private") or {}
+    raw_minutes = private.get("smartCalendarTravelMinutes")
+    mode = private.get("smartCalendarTravelMode") or "driving"
+    if not raw_minutes:
+        return None
+    try:
+        minutes = int(raw_minutes)
+    except ValueError:
+        return None
+    icon = _TRAVEL_MODE_ICON.get(mode, "🚗")
+    phrase = _TRAVEL_MODE_PHRASE.get(mode, "trip")
+    return f"{icon} {minutes} min {phrase}"
+
+
 def format_leave_alert(calendar_event: dict) -> str:
     """Format a leave-now text message for a due in-person event."""
     lines = [f"‼️ hey, it's time to leave for {_build_leave_alert_headline(calendar_event)}!"]
     location = _calendar_event_location_label(calendar_event)
     if location:
         lines.append(f"📍 {location}")
+    travel_line = _format_travel_line(calendar_event)
+    if travel_line:
+        lines.append(travel_line)
     return "\n".join(lines)
 
 
