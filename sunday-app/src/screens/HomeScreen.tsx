@@ -101,7 +101,10 @@ export function HomeScreen({
       if (result.blob) {
         // Web: upload blob directly, skip file system
         source = result.blob;
-        labelUri = `web-${Date.now()}`;
+        labelUri =
+          typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+            ? URL.createObjectURL(result.blob)
+            : `web-${Date.now()}`;
       } else {
         // Native: persist to file system first
         const persisted = await persistRecordingFile(result.uri);

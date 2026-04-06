@@ -7,6 +7,7 @@ import {
   FlatList,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -376,10 +377,12 @@ function EntryDetailModal({ entry, onClose }: EntryDetailModalProps) {
       return;
     }
 
-    const audioFile = new File(entry.audioUri);
-    if (!audioFile.exists) {
-      console.warn("[sunday] saved audio file is missing", entry.audioUri);
-      return;
+    if (Platform.OS !== "web") {
+      const audioFile = new File(entry.audioUri);
+      if (!audioFile.exists) {
+        console.warn("[sunday] saved audio file is missing", entry.audioUri);
+        return;
+      }
     }
 
     if (playbackStatus.playing) {

@@ -5,6 +5,23 @@ import { AlertEntry } from "./alertEntries";
 const ALERT_ENTRIES_KEY = "sunday.alertEntries.v1";
 const PENDING_RELOAD_MESSAGE = "The app reloaded before transcription finished.";
 
+function normalizeLoadedAudioUri(audioUri?: string | null) {
+  if (typeof audioUri !== "string") {
+    return null;
+  }
+
+  if (Platform.OS !== "web") {
+    return audioUri;
+  }
+
+  // Blob/object URLs from previous page loads are no longer valid after a reload.
+  if (audioUri.startsWith("blob:") || audioUri.startsWith("web-")) {
+    return null;
+  }
+
+  return audioUri;
+}
+
 // ── File system (native only) ─────────────────────────────────────────────────
 
 function getFileExtension(uri: string) {
@@ -42,6 +59,7 @@ function normalizeLoadedEntry(entry: AlertEntry): AlertEntry {
     status: "failed",
     summary: "Transcription interrupted",
     transcript: entry.transcript.trim() || PENDING_RELOAD_MESSAGE,
+    audioUri: normalizeLoadedAudioUri(entry.audioUri),
   };
 }
 
@@ -65,7 +83,7 @@ function parseStoredEntry(value: unknown): AlertEntry | null {
     transcript: candidate.transcript,
     createdAt: candidate.createdAt,
     status: candidate.status,
-    audioUri: typeof candidate.audioUri === "string" ? candidate.audioUri : null,
+    audioUri: normalizeLoadedAudioUri(candidate.audioUri),
     actions: Array.isArray(candidate.actions) ? candidate.actions : undefined,
   };
 }
@@ -95,6 +113,12 @@ export async function persistRecordingFile(sourceUri: string): Promise<string> {
 }
 
 export async function deleteStoredAlertAudio(audioUri?: string | null): Promise<void> {
-  if (!audioUri || Platform.OS === "web") return;
+  if (!audioUri) return;
+  if (Platform.OS === "web") {
+    if (audioUri.startsWith("blob:") && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(audioUri);
+    }
+    return;
+  }
   await nativeDeleteStoredAlertAudio(audioUri);
 }
