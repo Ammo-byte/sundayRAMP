@@ -5,6 +5,7 @@ import {
   Dimensions,
   Keyboard,
   LayoutAnimation,
+  PanResponder,
   Pressable,
   Platform,
   ScrollView,
@@ -118,11 +119,33 @@ function RecordTabIcon({
 function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]; isDemo?: boolean }) {
   const insets = useSafeAreaInsets();
   const scrollRef = React.useRef<ScrollView>(null);
+  const activeIndexRef = React.useRef(INITIAL_INDEX);
   const scrollX = React.useRef(new Animated.Value(INITIAL_INDEX * SCREEN_WIDTH)).current;
   const navTranslateY = React.useRef(new Animated.Value(0)).current;
   const recordIconProgress = React.useRef(new Animated.Value(0)).current;
   const [activeIndex, setActiveIndex] = React.useState(INITIAL_INDEX);
   const [navVisible, setNavVisible] = React.useState(true);
+
+  // Keep a ref in sync so the PanResponder (created once) can read the latest value
+  React.useEffect(() => {
+    activeIndexRef.current = activeIndex;
+  }, [activeIndex]);
+
+  const swipePanResponder = React.useRef(
+    PanResponder.create({
+      // Claim horizontal swipes in the capture phase before nested ScrollViews can
+      onMoveShouldSetPanResponderCapture: (_, { dx, dy }) =>
+        Math.abs(dx) > Math.abs(dy) * 2 && Math.abs(dx) > 12,
+      onPanResponderRelease: (_, { dx }) => {
+        if (Math.abs(dx) < 50) return;
+        const next =
+          dx < 0
+            ? Math.min(activeIndexRef.current + 1, TABS.length - 1)
+            : Math.max(activeIndexRef.current - 1, 0);
+        scrollRef.current?.scrollTo({ x: next * SCREEN_WIDTH, animated: true });
+      },
+    }),
+  ).current;
   const [isRecordingActive, setIsRecordingActive] = React.useState(false);
   const [alertEntries, setAlertEntries] = React.useState<AlertEntry[]>([]);
   const [entriesHydrated, setEntriesHydrated] = React.useState(false);
@@ -424,7 +447,7 @@ function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]
   );
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} {...swipePanResponder.panHandlers}>
       {/* Screens */}
       <ScrollView
         ref={scrollRef}
