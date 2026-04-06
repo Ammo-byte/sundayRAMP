@@ -19,7 +19,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
 import { TodayScreen } from "./src/screens/TodayScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { clearAuthState, getAuthState, saveAuthState } from "./src/lib/auth";
+import { clearAuthState, saveAuthState } from "./src/lib/auth";
 import {
   SettingsIcon,
   TodayIcon,
@@ -722,25 +722,15 @@ export default function App() {
   const [startDemoGuideImmediately, setStartDemoGuideImmediately] = React.useState(false);
 
   React.useEffect(() => {
-    getAuthState()
-      .then(async (state) => {
-        if (state?.isDemo) {
-          await clearAuthState();
-          setIsDemo(false);
-          setSeedEntries([]);
-          setStartDemoGuideImmediately(false);
-          setAuthed(false);
-        } else {
-          setIsDemo(false);
-          setSeedEntries([]);
-          setStartDemoGuideImmediately(false);
-          setAuthed(!!state);
-        }
-      })
+    clearAuthState()
       .catch(() => {
-        // Auth check failed — show login screen
+        // Ignore auth reset failures and still show the auth screen.
       })
       .finally(() => {
+        setIsDemo(false);
+        setSeedEntries([]);
+        setStartDemoGuideImmediately(false);
+        setAuthed(false);
         setAuthChecked(true);
       });
   }, []);
