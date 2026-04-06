@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Animated,
+  Text,
   Platform,
   Pressable,
   StatusBar,
@@ -21,7 +22,10 @@ const MIN_RECORDING_DURATION_MILLIS = 150;
 const TOO_SHORT_RECORDING_MESSAGE = "Recording was too short. Hold the button a little longer and try again.";
 
 type HomeScreenProps = {
+  isDemo?: boolean;
+  hasEntries?: boolean;
   onBackgroundPress?: () => void;
+  onNavigateToEntries?: () => void;
   onTranscriptPending?: (audioUri: string) => string;
   onTranscript?: (entryId: string, transcript: string, summary?: string, actions?: ActionItem[]) => void;
   onTranscriptError?: (entryId: string, message: string) => void;
@@ -29,7 +33,10 @@ type HomeScreenProps = {
 };
 
 export function HomeScreen({
+  isDemo = false,
+  hasEntries = false,
   onBackgroundPress,
+  onNavigateToEntries,
   onTranscriptPending,
   onTranscript,
   onTranscriptError,
@@ -147,6 +154,37 @@ export function HomeScreen({
       {Platform.OS !== "web" && <StatusBar barStyle="light-content" />}
       <View style={styles.container}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onBackgroundPress} />
+        <View pointerEvents="box-none" style={styles.overlay}>
+          <View style={styles.guideCard}>
+            <Text style={styles.guideEyebrow}>{isDemo ? "DEMO START HERE" : "START HERE"}</Text>
+            <Text style={styles.guideTitle}>
+              {isDemo ? "See Sunday work in under a minute" : "Tap the dot to record a note"}
+            </Text>
+            <Text style={styles.guideBody}>
+              {isDemo
+                ? "If you want the walkthrough first, jump into Entries and open the card marked Start Here."
+                : "Say the task naturally. Sunday will transcribe it, pull out actions, and save the result in Entries."}
+            </Text>
+            <View style={styles.guideSteps}>
+              <Text style={styles.guideStep}>
+                1. {isDemo ? "Open Entries from the bottom nav." : "Tap once to start recording."}
+              </Text>
+              <Text style={styles.guideStep}>
+                2. {isDemo ? "Open “Voice note: booked product review for 2 PM.”" : "Tap again when you are done speaking."}
+              </Text>
+              <Text style={styles.guideStep}>
+                3. {isDemo ? "Follow the in-app steps into Today to see the created event." : "Open Entries to review the transcript and actions."}
+              </Text>
+            </View>
+            {onNavigateToEntries ? (
+              <Pressable style={styles.guideButton} onPress={onNavigateToEntries}>
+                <Text style={styles.guideButtonText}>
+                  {isDemo ? "Open demo walkthrough" : hasEntries ? "Open Entries" : "See where notes go"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
         <Pressable onPress={handleDotPress} style={styles.centerDotTapTarget}>
           <Animated.View
             style={[
@@ -175,6 +213,65 @@ const styles = StyleSheet.create({
     position: "relative",
     alignItems: "center",
     justifyContent: "center",
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 140,
+  },
+  guideCard: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 760,
+    backgroundColor: "rgba(36, 36, 36, 0.92)",
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    borderWidth: 1,
+    borderRadius: 28,
+    paddingHorizontal: 22,
+    paddingVertical: 20,
+    gap: 10,
+  },
+  guideEyebrow: {
+    color: "#8fb4ff",
+    fontFamily: "GoogleSans-Bold",
+    fontSize: 13,
+    letterSpacing: 0.8,
+  },
+  guideTitle: {
+    color: "#ffffff",
+    fontFamily: "GoogleSans-Bold",
+    fontSize: Platform.OS === "web" ? 34 : 30,
+    lineHeight: Platform.OS === "web" ? 40 : 36,
+  },
+  guideBody: {
+    color: "#d1d1d1",
+    fontFamily: "GoogleSans-Regular",
+    fontSize: 18,
+    lineHeight: 28,
+  },
+  guideSteps: {
+    gap: 8,
+  },
+  guideStep: {
+    color: "#f5f5f5",
+    fontFamily: "GoogleSans-Medium",
+    fontSize: 18,
+    lineHeight: 28,
+  },
+  guideButton: {
+    marginTop: 4,
+    alignSelf: "flex-start",
+    backgroundColor: "#ffffff",
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  guideButtonText: {
+    color: BACKGROUND,
+    fontFamily: "GoogleSans-Bold",
+    fontSize: 16,
   },
   centerDotTapTarget: {
     width: DOT_SIZE,

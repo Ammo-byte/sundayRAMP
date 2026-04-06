@@ -565,7 +565,10 @@ function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]
         </View>
         <View style={styles.page}>
           <HomeScreen
+            isDemo={isDemo}
+            hasEntries={alertEntries.length > 0}
             onBackgroundPress={handleRecordBackgroundPress}
+            onNavigateToEntries={() => handleTabPress(ALERTS_TAB_INDEX)}
             onTranscriptPending={handleTranscriptPending}
             onTranscript={handleTranscript}
             onTranscriptError={handleTranscriptError}
