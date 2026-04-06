@@ -27,7 +27,7 @@ type Props = {
 };
 
 export function AuthScreen({ onAuth }: Props) {
-  const [tab, setTab] = React.useState<Tab>("signup");
+  const [tab, setTab] = React.useState<Tab>("login");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -78,7 +78,9 @@ export function AuthScreen({ onAuth }: Props) {
           {/* Logo */}
           <View style={styles.logoRow}>
             <Text style={styles.logoText}>Sunday</Text>
-            <Text style={styles.tagline}>Your AI-powered personal assistant</Text>
+            <Text style={styles.tagline}>
+              Log in or start the guided demo walkthrough with one tap.
+            </Text>
           </View>
 
           {/* Card */}
@@ -152,7 +154,7 @@ export function AuthScreen({ onAuth }: Props) {
               <Text style={styles.demoBtnText}>Try Demo  →</Text>
             </Pressable>
             <Text style={styles.demoHint}>
-              No sign-up needed — explore with sample data
+              No sign-up needed — jump straight into the guided walkthrough with sample data
             </Text>
           </View>
         </ScrollView>

@@ -19,7 +19,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
 import { TodayScreen } from "./src/screens/TodayScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { demoLogin, getAuthState, saveAuthState } from "./src/lib/auth";
+import { clearAuthState, getAuthState, saveAuthState } from "./src/lib/auth";
 import {
   SettingsIcon,
   TodayIcon,
@@ -679,23 +679,15 @@ export default function App() {
     getAuthState()
       .then(async (state) => {
         if (state?.isDemo) {
-          setIsDemo(true);
-          try {
-            const res = await demoLogin();
-            await saveAuthState(res.token, true);
-            setSeedEntries(normalizeDemoSeedEntries((res.demo_entries ?? []) as AlertEntry[]));
-          } catch (error) {
-            console.warn(
-              "[sunday] failed to refresh demo entries",
-              error instanceof Error ? error.message : error,
-            );
-            setSeedEntries(normalizeDemoSeedEntries([]));
-          }
+          await clearAuthState();
+          setIsDemo(false);
+          setSeedEntries([]);
+          setAuthed(false);
         } else {
           setIsDemo(false);
           setSeedEntries([]);
+          setAuthed(!!state);
         }
-        setAuthed(!!state);
       })
       .catch(() => {
         // Auth check failed — show login screen
@@ -707,12 +699,14 @@ export default function App() {
 
   const handleAuth = React.useCallback(
     async (token: string, demo: boolean, demoEntries?: object[]) => {
-      await saveAuthState(token, demo);
       setIsDemo(demo);
       if (demo && demoEntries?.length) {
         setSeedEntries(normalizeDemoSeedEntries(demoEntries as AlertEntry[]));
       } else if (demo) {
         setSeedEntries(normalizeDemoSeedEntries([]));
+      } else {
+        await saveAuthState(token, false);
+        setSeedEntries([]);
       }
       setAuthed(true);
     },
