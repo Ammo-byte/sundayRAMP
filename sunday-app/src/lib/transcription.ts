@@ -1,5 +1,6 @@
 import { ActionItem } from "./alertEntries";
 import { fetchApi } from "./api";
+import { Platform } from "react-native";
 
 const API_TOKEN = (process.env.EXPO_PUBLIC_API_TOKEN ?? "").trim();
 const TRANSCRIPTION_REQUEST_TIMEOUT_MS = 60000;
@@ -58,12 +59,6 @@ export type TranscriptionResult = {
   actions?: ActionItem[];
 };
 
-type ReactNativeUploadFile = {
-  uri: string;
-  name: string;
-  type: string;
-};
-
 function getAudioMimeType(fileName: string) {
   if (fileName.endsWith(".wav")) {
     return "audio/wav";
@@ -77,7 +72,10 @@ function getAudioMimeType(fileName: string) {
   if (fileName.endsWith(".ogg")) {
     return "audio/ogg";
   }
-  return "audio/m4a";
+  if (fileName.endsWith(".m4a") || fileName.endsWith(".mp4")) {
+    return "audio/mp4";
+  }
+  return "application/octet-stream";
 }
 
 function getBlobExtension(blob: Blob) {
@@ -133,15 +131,30 @@ function normalizeTranscriptionErrorMessage(message: string) {
   return trimmed;
 }
 
+async function appendNativeRecording(formData: FormData, uri: string, fileName: string) {
+  const mimeType = getAudioMimeType(fileName.toLowerCase());
+
+  if (Platform.OS !== "web") {
+    const { File } = await import("expo-file-system");
+    const audioFile = new File(uri);
+    if (!audioFile.exists || audioFile.size <= 0) {
+      throw new Error("Recorded audio was empty. Please try again.");
+    }
+    const bytes = await audioFile.bytes();
+    if (!bytes.length) {
+      throw new Error("Recorded audio was empty. Please try again.");
+    }
+    formData.append("file", new Blob([bytes], { type: mimeType }), fileName);
+    return;
+  }
+
+  formData.append("file", { uri, name: fileName, type: mimeType } as any, fileName);
+}
+
 export async function uploadRecordingForTranscription(uri: string): Promise<TranscriptionResult> {
   const fileName = uri.split("/").pop() ?? "recording.m4a";
   const formData = new FormData();
-  const file: ReactNativeUploadFile = {
-    uri,
-    name: fileName,
-    type: getAudioMimeType(fileName.toLowerCase()),
-  };
-  formData.append("file", file as any, fileName);
+  await appendNativeRecording(formData, uri, fileName);
 
   const headers: Record<string, string> = {};
   if (API_TOKEN) {
