@@ -157,6 +157,10 @@ export async function uploadRecordingForTranscription(uri: string): Promise<Tran
 }
 
 export async function uploadBlobForTranscription(blob: Blob): Promise<TranscriptionResult> {
+  if (blob.size <= 0) {
+    throw new Error("Recorded audio was empty. Please try again.");
+  }
+
   const ext = getBlobExtension(blob);
   const formData = new FormData();
   formData.append("file", blob, `recording.${ext}`);
