@@ -3,14 +3,14 @@ google_auth.py — Shared Google OAuth helper.
 
 Handles two modes:
   1. Local / file-based:  token.json lives on disk (normal dev workflow)
-  2. Vercel / env-based:  token JSON is stored as GOOGLE_TOKEN_JSON env var
+  2. Hosted / env-based:  token JSON is stored as GOOGLE_TOKEN_JSON env var
                           (base64-encoded so it survives env var restrictions)
 
-To prepare for Vercel:
+To prepare for Railway or another hosted backend:
     1. Run locally first so token.json is created.
     2. Base64-encode it:
            python -c "import base64; print(base64.b64encode(open('token.json','rb').read()).decode())"
-    3. Paste the output as GOOGLE_TOKEN_JSON in your Vercel project's
+    3. Paste the output as GOOGLE_TOKEN_JSON in your Railway or hosted backend
        Environment Variables (Settings → Environment Variables).
     4. Similarly encode credentials.json → GOOGLE_CREDENTIALS_JSON.
 """
@@ -65,7 +65,7 @@ def _load_token() -> Credentials | None:
     Load a saved OAuth token.
 
     Checks (in order):
-      1. GOOGLE_TOKEN_JSON env var (base64-encoded, used on Vercel)
+      1. GOOGLE_TOKEN_JSON env var (base64-encoded, used on hosted backends)
       2. token.json file on disk (used locally)
     """
     env_token = os.environ.get("GOOGLE_TOKEN_JSON")
@@ -85,7 +85,7 @@ def _save_token(creds: Credentials) -> None:
     """
     Persist the token to disk.
 
-    On Vercel the filesystem is ephemeral (read-only in prod), so we just
+    On hosted backends the filesystem is ephemeral (read-only in prod), so we just
     log a reminder to update the env var. Locally it writes to token.json.
     """
     try:
@@ -93,7 +93,7 @@ def _save_token(creds: Credentials) -> None:
         token_path.write_text(creds.to_json())
         log.info("Token saved to %s", token_path)
         log.info(
-            "To deploy to Vercel, update GOOGLE_TOKEN_JSON with:\n"
+            "To deploy to Railway or another hosted backend, update GOOGLE_TOKEN_JSON with:\n"
             "  python -c \"import base64; print(base64.b64encode("
             "open('token.json','rb').read()).decode())\""
         )
@@ -122,7 +122,7 @@ def get_google_service(service_name: str, version: str):
     """
     Authenticate with Google and return an API service client.
 
-    Works both locally (file-based token) and on Vercel (env-var token).
+    Works both locally (file-based token) and on hosted backends (env-var token).
 
     Args:
         service_name: e.g. "gmail" or "calendar"
@@ -141,7 +141,7 @@ def get_google_service(service_name: str, version: str):
                 raise RuntimeError(
                     "Google OAuth token is missing or invalid. "
                     "Run the app locally first to generate token.json, "
-                    "then set GOOGLE_TOKEN_JSON in your Vercel environment variables."
+                    "then set GOOGLE_TOKEN_JSON in your hosted backend environment variables."
                 )
             log.info("Starting Google OAuth flow — a browser window will open.")
             creds_path = _load_credentials_file()

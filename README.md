@@ -1,477 +1,671 @@
 # Sunday
 
-Sunday is a personal AI assistant that watches your Gmail, manages your calendar, transcribes voice notes, and sends you intelligent summaries via iMessage or Telegram — all powered by your choice of LLM.
+Sunday is a personal AI assistant for email, calendar, and voice notes. It watches Gmail, turns relevant emails into calendar events, estimates travel time, transcribes voice recordings, and sends summaries through iMessage, Telegram, or WhatsApp.
 
-## What It Does
+The project has two parts:
 
-- **Email → Calendar** — watches Gmail in real time, parses events with AI, writes to Google Calendar, estimates travel time, and sends you a concise summary
-- **Voice Notes** — tap the dot to record, Sunday transcribes and summarizes it instantly
-- **AI Insights** — optional agent mode delivers deeper insights via iMessage/Telegram using web search
-- **Smart Filtering** — ignores promotions, newsletters, and automated emails
-- **OpenClaw** — optional integration with a local AI agent for autonomous task handling
+- `backend/`: a FastAPI server that talks to Gmail, Google Calendar, your LLM, transcription, and messaging channels
+- `sunday-app/`: an Expo app that runs on iPhone, Android, and web
 
-## Table of Contents
+## What Sunday does
 
-1. [How It Works](#how-it-works)
-2. [Project Layout](#project-layout)
-3. [Quick Start — Demo (No Setup)](#quick-start--demo-no-setup)
-4. [Deployment](#deployment)
-   - [Backend → Railway](#backend--railway)
-   - [Frontend → Vercel](#frontend--vercel)
-5. [Expo Go (Local Dev)](#expo-go-local-dev)
-6. [Tailscale (Remote Access)](#tailscale-remote-access)
-7. [OpenClaw Integration](#openclaw-integration)
-8. [Local Setup From Scratch](#local-setup-from-scratch)
-9. [LLM Providers](#llm-providers)
-10. [Messaging Channels](#messaging-channels)
-11. [Agent Mode](#agent-mode)
-12. [Configuration Guide](#configuration-guide)
-13. [API Endpoints](#api-endpoints)
-14. [Troubleshooting](#troubleshooting)
+- Email -> Calendar: reads Gmail, extracts events and tasks, writes to Google Calendar, and sends a concise summary
+- Voice notes: records in the app, uploads audio, transcribes it, titles it, and saves it to Alerts
+- Today view: shows upcoming calendar items with travel or prep context
+- Messaging: sends summaries through Telegram, WhatsApp, or iMessage
+- Agent mode: can add deeper AI follow-up through the built-in agent or OpenClaw
+
+## Table of contents
+
+1. [How Sunday is split](#how-sunday-is-split)
+2. [How the app works](#how-the-app-works)
+3. [Choose a setup path](#choose-a-setup-path)
+4. [Project layout](#project-layout)
+5. [Quick start demo](#quick-start-demo)
+6. [Hosted deployment](#hosted-deployment)
+7. [Expo Go](#expo-go)
+8. [Tailscale remote access](#tailscale-remote-access)
+9. [Self-hosted local setup](#self-hosted-local-setup)
+10. [Messaging channels](#messaging-channels)
+11. [LLM providers](#llm-providers)
+12. [OpenClaw integration](#openclaw-integration)
+13. [Agent mode](#agent-mode)
+14. [Configuration guide](#configuration-guide)
+15. [API endpoints](#api-endpoints)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
-## How It Works
+## How Sunday is split
 
-### Email → Calendar
+This is the part that trips people up most often:
 
-```
+- Frontend: the Expo app, including the web build you can deploy to Vercel
+- Backend API: the FastAPI server, usually deployed to Railway or run locally on your Mac
+- `Hosted` in the app means "use a deployed backend URL", which is usually your Railway URL
+- `Self-hosted` in the app means "use my own Mac/local backend", such as `http://192.168.x.x:8000`
+
+Important:
+
+- Your `*.vercel.app` URL is the web frontend, not the calendar/transcription API
+- The app's `Hosted backend URL` should point to Railway, not to Vercel
+- iMessage only works when the backend is running locally on macOS
+- Telegram and WhatsApp work on both Hosted and Self-hosted backends
+
+---
+
+## How the app works
+
+### Main screens
+
+- `Today`: shows upcoming events, travel timing, and scheduling context
+- `Record`: records a voice note and sends it to `/api/transcribe`
+- `Alerts`: stores summaries, transcripts, and playable recordings
+- `Settings`: chooses `Hosted` vs `Self-hosted`, messaging channel, Google connection, home/work locations, and model settings
+
+### Email flow
+
+```text
 Gmail inbox
-  → AI parses email (event, urgency, action items)
-  → Travel time estimated via Google Maps
-  → Event written to Google Calendar
-  → Summary sent to iMessage / Telegram
-  → (optional) OpenClaw or built-in AI adds deeper insights
+  -> Sunday reads new mail
+  -> AI decides whether it matters
+  -> event details are extracted
+  -> Google Maps estimates travel or prep time
+  -> Google Calendar is updated
+  -> summary is sent to Telegram / WhatsApp / iMessage
+  -> optional agent mode adds deeper follow-up
 ```
 
-### Voice Notes
+### Voice note flow
 
-```
-Record on phone / browser
-  → Audio uploaded to backend
-  → Groq Whisper API transcribes it
-  → AI generates a short title
-  → Entry appears in Alerts tab
+```text
+Record in app or browser
+  -> audio is uploaded to the backend
+  -> Groq Whisper API or a local transcription model creates the transcript
+  -> Sunday generates a short title
+  -> entry appears in Alerts
+  -> optional actions are extracted from the transcript
 ```
 
 ---
 
-## Project Layout
+## Choose a setup path
 
-```
+| I want to... | Use this | Notes |
+|---|---|---|
+| Click around the UI only | Hosted web demo | No personal Gmail or backend setup required |
+| Use Sunday from web or Expo Go with a deployed backend | Railway backend + Vercel web or Expo Go in `Hosted` mode | Best default for most people |
+| Use iMessage, local tools, or a Mac-only workflow | Local Mac backend in `Self-hosted` mode | Required for iMessage |
+
+---
+
+## Project layout
+
+```text
 sunday/
-├── backend/          Python backend (Gmail, LLM, calendar, transcription)
-├── sunday-app/       Expo app (iOS, Android, Web)
-├── models/           Local model files (ignored by git)
-├── config.env        Your local config (ignored by git)
-├── config.env.example  Template
-├── Procfile          Railway deployment
-└── vercel.json       Legacy Vercel config (root)
+├── backend/             Python backend (Gmail, LLM, calendar, transcription, messaging)
+├── sunday-app/          Expo app (iOS, Android, web)
+├── models/              Local model files (ignored by git)
+├── config.env           Your local backend config (ignored by git)
+├── config.env.example   Backend config template
+├── Procfile             Railway deployment entry
+└── vercel.json          Root Vercel config (legacy)
 
 sunday-app/
 ├── src/
-│   ├── screens/      Settings, Today, Home (record), Alerts, Auth
-│   ├── lib/          API client, auth, recorder, transcription
-│   └── stubs/        Web platform stubs (react-native-maps)
-├── vercel.json       Vercel deployment config for Expo Web
-└── metro.config.js   Metro bundler config (web stubs)
+│   ├── screens/         Today, Record, Alerts, Settings, Auth
+│   ├── lib/             API client, connection prefs, recorder, transcription
+│   └── stubs/           Web platform stubs
+├── .env.example         App env template
+├── vercel.json          Vercel config for Expo web
+└── metro.config.js      Metro config
 ```
 
 ---
 
-## Quick Start — Demo (No Setup)
+## Quick start demo
 
-The fastest way to try Sunday is the hosted web app. No account, no API keys.
+If someone already deployed the web app, this is the fastest way to see Sunday without setting up keys.
 
-1. Open the Vercel URL (set by whoever deployed it)
-2. Click **Try Demo →**
-3. Browse the pre-populated Alerts, Today schedule, and Settings
+1. Open the deployed web URL
+2. Click `Try Demo`
+3. Browse the sample Alerts, Today, and Settings screens
+
+The demo is for UI exploration. Real Gmail watching, transcription, and messaging need a live backend.
 
 ---
 
-## Deployment
+## Hosted deployment
 
-### Backend → Railway
+This is the recommended setup when you want a shareable web app or want Expo Go to talk to a deployed backend.
 
-1. Fork this repo to your GitHub account
-2. Go to **railway.app** → **New Project** → **Deploy from GitHub repo** → select your fork
-3. Railway detects the `Procfile` automatically
-4. Go to **Variables** and add:
+### 1. Deploy the backend to Railway
 
+1. Fork this repo
+2. In Railway, create a new project from your fork
+3. Railway will detect the `Procfile`
+4. Add the backend environment variables below
+5. Generate a public Railway domain and copy it
+
+Recommended minimum Railway variables:
+
+```env
+BACKEND_TARGET=Hosted
+# Legacy variable name; this should still be your Railway backend URL.
+VERCEL_BASE_URL=https://your-app.railway.app
+
+ACTIVE_LLM_PROVIDER=groq
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.1-8b-instant
+
+JWT_SECRET=replace-with-a-random-32-char-secret
+SUNDAY_API_KEY=replace-with-a-random-api-token
+
+MESSAGE_CHANNEL=Telegram
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+AGENT_MODE=off
 ```
-GROQ_API_KEY          = gsk_...          # from console.groq.com (free)
-ACTIVE_LLM_PROVIDER   = groq
-GROQ_MODEL            = llama-3.1-8b-instant
-JWT_SECRET            = <random 32+ char string>
-AGENT_MODE            = off
+
+Notes:
+
+- `Hosted` means Railway in this project
+- `VERCEL_BASE_URL` is a legacy setting name, but it should contain your Railway backend URL
+- `SUNDAY_API_KEY` is optional locally, but recommended on deployed backends
+- If you set `SUNDAY_API_KEY` on the backend, set the same value as `EXPO_PUBLIC_API_TOKEN` in the app/frontend env
+- When `GROQ_API_KEY` is set, Sunday uses Groq's hosted Whisper transcription and does not need local transcription models on Railway
+
+### 2. Put Google credentials on Railway
+
+The least painful hosted path is to authorize Google once locally, then copy the resulting credentials into Railway.
+
+1. In Google Cloud, enable Gmail API, Calendar API, and Maps APIs
+2. Download your OAuth `credentials.json`
+3. Run Sunday locally once so it creates `token.json`
+4. Base64-encode both files:
+
+```bash
+python3 -c "import base64; print(base64.b64encode(open('credentials.json','rb').read()).decode())"
+python3 -c "import base64; print(base64.b64encode(open('token.json','rb').read()).decode())"
 ```
 
-5. **Settings → Networking → Generate Domain** — copy your Railway URL
+5. Add these Railway variables:
 
-> **Transcription** uses Groq's Whisper API automatically when `GROQ_API_KEY` is set — no model files needed on the server.
+```env
+GOOGLE_CREDENTIALS_JSON=<base64 credentials.json>
+GOOGLE_TOKEN_JSON=<base64 token.json>
+GOOGLE_MAPS_API_KEY=<your maps key>
+```
 
-**Optional — real Gmail sign-in:**
+This avoids trying to do an interactive OAuth browser flow on a hosted backend.
 
-To let users connect their own Gmail:
+### 3. Deploy the web frontend to Vercel
 
-1. In Google Cloud Console → **Credentials** → change your OAuth client type to **Web application**
-2. Add `https://your-app.railway.app/auth/google/callback` as an Authorized redirect URI
-3. Download the new `credentials.json`, base64-encode it:
-   ```bash
-   python3 -c "import base64; print(base64.b64encode(open('credentials.json','rb').read()).decode())"
-   ```
-4. Add to Railway: `GOOGLE_CREDENTIALS_JSON = <base64 output>`
+1. Import the repo into Vercel
+2. Set the project root to `sunday-app`
+3. Add frontend env vars:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=https://your-app.railway.app
+EXPO_PUBLIC_API_TOKEN=the-same-value-as-SUNDAY_API_KEY
+```
+
+4. Deploy
+
+Notes:
+
+- Vercel hosts the web UI
+- Railway hosts the API
+- The frontend should never use the `*.vercel.app` URL as its backend API base
 
 ---
 
-### Frontend → Vercel
+## Expo Go
 
-1. Go to **vercel.com** → **Add New Project** → import your fork
-2. Set **Root Directory** to `sunday-app`
-3. Add environment variable:
-   ```
-   EXPO_PUBLIC_API_BASE_URL = https://your-app.railway.app
-   ```
-4. Click **Deploy**
+Expo Go is the fastest way to run the mobile app without making a full native build.
 
-Judges/users visit your Vercel URL — no install needed.
+### Expo Go with a hosted Railway backend
 
----
-
-## Expo Go (Local Dev)
-
-Expo Go lets anyone on your local network try the app instantly — no TestFlight, no build.
-
-### Setup
+Use this if you want your phone to talk to the deployed backend.
 
 ```bash
 cd sunday-app
 cp .env.example .env
-# Edit .env — set EXPO_PUBLIC_API_BASE_URL to your Mac's local IP:
-# EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000
 npm install
 npm run start
 ```
 
-Scan the QR code with the **Expo Go** app (iOS App Store / Google Play).
+In `sunday-app/.env` set:
 
-### Tunnel mode (if QR code doesn't connect)
+```env
+EXPO_PUBLIC_API_BASE_URL=https://your-app.railway.app
+EXPO_PUBLIC_API_TOKEN=the-same-value-as-SUNDAY_API_KEY
+```
+
+Then scan the QR code in Expo Go.
+
+### Expo Go with a local Mac backend
+
+Use this if you want `Self-hosted` mode or iMessage.
+
+1. Find your Mac's IP:
+
+```bash
+ipconfig getifaddr en0
+```
+
+2. Set:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000
+EXPO_PUBLIC_API_FALLBACK_URLS=http://your-mac.local:8000,http://100.x.y.z:8000
+```
+
+3. Run the backend with:
+
+```bash
+uv run uvicorn backend.server:app --host 0.0.0.0 --port 8000
+```
+
+4. Start Expo:
+
+```bash
+cd sunday-app
+npm run start
+```
+
+### Tunnel mode
+
+If the QR code does not connect on your network:
 
 ```bash
 npm run start -- --tunnel
 ```
 
-This routes traffic through Expo's servers so the phone doesn't need to be on the same network.
+### Expo Go feature limits
 
-### Finding your Mac's IP
+| Feature | Expo Go | Full build |
+|---|---|---|
+| Record / Alerts / Settings | Yes | Yes |
+| Hosted backend access | Yes | Yes |
+| Local backend access | Yes | Yes |
+| Push notifications | No | Yes |
+| Background behavior | No | Yes |
+| Widgets / native extras | No | Yes |
+
+---
+
+## Tailscale remote access
+
+Tailscale is useful when your backend is running on your Mac but your phone is away from the same Wi-Fi.
+
+1. Install Tailscale on your Mac
+2. Sign in
+3. Get your Tailscale IPv4 address:
 
 ```bash
-ipconfig getifaddr en0   # Wi-Fi
-ipconfig getifaddr en1   # Ethernet
+tailscale ip -4
 ```
 
-### Limitations in Expo Go
+4. Use that IP in the app:
 
-| Feature | Expo Go | Deployed build |
-|---|---|---|
-| Core app (record, alerts, settings) | ✅ | ✅ |
-| iMessage / Telegram notifications | ✅ (backend sends) | ✅ |
-| Voice recording | ✅ | ✅ |
-| Home screen widgets | ❌ | ✅ |
-| Push notifications | ❌ | ✅ |
-| Background processing | ❌ | ✅ |
+```env
+EXPO_PUBLIC_API_BASE_URL=http://100.x.y.z:8000
+```
+
+This is also useful for OpenClaw webhooks that need to reach your Mac from a hosted backend.
 
 ---
 
-## Tailscale (Remote Access)
+## Self-hosted local setup
 
-Tailscale lets the backend (on your Mac) be reachable from anywhere — useful for OpenClaw and for accessing Sunday when you're not on the same Wi-Fi.
-
-### Setup
-
-1. Install Tailscale on your Mac: **tailscale.com/download**
-2. Sign in and enable Tailscale
-3. Get your Mac's Tailscale IP:
-   ```bash
-   tailscale ip -4
-   ```
-4. Use that IP in `EXPO_PUBLIC_API_BASE_URL`:
-   ```
-   EXPO_PUBLIC_API_BASE_URL=http://100.x.y.z:8000
-   ```
-
-Now Expo Go can reach your backend from any network — phone data, different Wi-Fi, anywhere.
-
-### Use with OpenClaw
-
-If you're running OpenClaw on your Mac and want the Railway backend to send it webhooks:
-
-1. Enable Tailscale in OpenClaw config:
-   ```json
-   "tailscale": { "mode": "on" }
-   ```
-2. OpenClaw gets a Tailscale URL like `https://your-mac.tailnet.ts.net:18789`
-3. Set in Railway variables:
-   ```
-   OPENCLAW_BASE_URL  = https://your-mac.tailnet.ts.net:18789
-   OPENCLAW_TOKEN     = your-openclaw-token
-   OPENCLAW_ENABLED   = true
-   AGENT_MODE         = openclaw
-   ```
-
----
-
-## OpenClaw Integration
-
-OpenClaw is an optional local AI agent that runs on your Mac. When enabled, Sunday sends it action items from emails and voice notes for autonomous handling.
-
-### How it works
-
-```
-Email processed by Sunday
-  → action items extracted
-  → POST /hooks/wake sent to OpenClaw
-  → OpenClaw agent runs with your LLM
-  → responds via iMessage
-```
-
-### Setup
-
-1. Install OpenClaw: **openclaw.ai**
-2. Set up your preferred LLM (needs Anthropic or OpenAI key in OpenClaw)
-3. Enable the iMessage channel in OpenClaw and restrict to your number:
-   ```json
-   "dmPolicy": "allowlist",
-   "allowFrom": ["+1xxxxxxxxxx"]
-   ```
-4. Enable Tailscale in OpenClaw for remote access
-5. In `config.env` (local) or Railway variables:
-   ```
-   AGENT_MODE         = openclaw
-   OPENCLAW_ENABLED   = true
-   OPENCLAW_BASE_URL  = https://your-mac.tailnet.ts.net:18789
-   OPENCLAW_TOKEN     = your-hook-token
-   ```
-
-### Agent mode options
-
-| Mode | What happens |
-|---|---|
-| `off` | No AI insights, just summaries |
-| `builtin` | Sunday's own LLM + DuckDuckGo web search, sends insight via iMessage/Telegram |
-| `openclaw` | Sends action items to your local OpenClaw agent |
-
----
-
-## Local Setup From Scratch
+Use this path if you want the backend on your Mac, especially for iMessage.
 
 ### Requirements
 
 - Python 3.10+
 - Node.js 18+
-- `uv` package manager (`pip install uv`)
-- Google Cloud project with Gmail API, Calendar API, Maps APIs enabled
-- One LLM API key (Groq recommended — free tier)
+- `uv` package manager
+- A Google Cloud project with Gmail API, Calendar API, and Maps APIs enabled
+- One LLM provider key, or a local Ollama setup
+- macOS if you want iMessage
 
-### Steps
+### 1. Install dependencies
 
 ```bash
-# 1. Clone
 git clone https://github.com/aryan-cs/sunday.git
 cd sunday
-
-# 2. Python deps
 uv sync --extra dev
-
-# 3. App deps
 cd sunday-app && npm install && cd ..
-
-# 4. Config
-cp config.env.example config.env
-# Edit config.env with your keys
-
-# 5. Google OAuth
-# Download credentials.json from Google Cloud Console
-# Run backend once to trigger browser OAuth flow
-
-# 6. Start backend
-uv run uvicorn backend.server:app --host 0.0.0.0 --port 8000
-
-# 7. Start app
-cd sunday-app && npm run start
 ```
 
-### Local config minimum
+### 2. Create backend config
+
+```bash
+cp config.env.example config.env
+```
+
+Minimum useful local backend config:
 
 ```env
+BACKEND_TARGET=Self-hosted
 ACTIVE_LLM_PROVIDER=groq
 GROQ_API_KEY=gsk_...
 GROQ_MODEL=llama-3.1-8b-instant
 
 GOOGLE_CREDENTIALS_FILE=credentials.json
 GOOGLE_TOKEN_FILE=token.json
+GOOGLE_MAPS_API_KEY=
 
-IMESSAGE_ENABLED=true
-IMESSAGE_RECIPIENT=+1xxxxxxxxxx
-# or use Telegram:
-# TELEGRAM_BOT_TOKEN=...
-# TELEGRAM_CHAT_ID=...
+MESSAGE_CHANNEL=Telegram
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
 
 DEFAULT_HOME_LOCATION=Your City, State
 TIMEZONE=America/Chicago
 ```
 
----
-
-## LLM Providers
-
-Sunday supports any of these — set `ACTIVE_LLM_PROVIDER` to one:
-
-| Provider | Key env var | Free tier |
-|---|---|---|
-| `groq` | `GROQ_API_KEY` | ✅ Generous |
-| `gemini` | `GEMINI_API_KEY` | ✅ 1500 req/day |
-| `openrouter` | `OPENROUTER_API_KEY` | ✅ Free models |
-| `openai` | `OPENAI_API_KEY` | ❌ Paid |
-| `anthropic` | `ANTHROPIC_API_KEY` | ❌ Paid |
-| `ollama` | — | ✅ Self-hosted |
-| `mistral` | `MISTRAL_API_KEY` | ✅ Free tier |
-| `cerebras` | `CEREBRAS_API_KEY` | ✅ Free tier |
-| `together` | `TOGETHER_API_KEY` | ✅ Free credits |
-
-**Recommended for deployment:** Groq — fast, free tier, and also handles transcription via Whisper API.
-
----
-
-## Messaging Channels
-
-### iMessage (macOS only)
+If you want to protect local API routes too:
 
 ```env
-IMESSAGE_ENABLED=true
-IMESSAGE_RECIPIENT=+1xxxxxxxxxx
-TEXT_EMAIL_LINKS=true
+SUNDAY_API_KEY=replace-with-a-random-api-token
 ```
 
-Requires `imsg` CLI:
+### 3. Connect Google locally
+
+1. Put your Google OAuth `credentials.json` in the repo root
+2. Start the backend once:
+
 ```bash
-brew install steipete/tap/imsg
+uv run uvicorn backend.server:app --host 0.0.0.0 --port 8000
 ```
-Grant Terminal Full Disk Access in System Settings → Privacy & Security.
+
+3. The first Gmail/Calendar request will trigger a browser OAuth flow
+4. Sunday will save the result to `token.json`
+
+### 4. Create the app env
+
+```bash
+cd sunday-app
+cp .env.example .env
+```
+
+Use your Mac's IP in `sunday-app/.env`:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8000
+EXPO_PUBLIC_API_FALLBACK_URLS=http://your-mac.local:8000,http://100.x.y.z:8000
+EXPO_PUBLIC_API_TOKEN=the-same-value-as-SUNDAY_API_KEY
+```
+
+### 5. Run the app
+
+```bash
+cd sunday-app
+npm run start
+```
+
+---
+
+## Messaging channels
+
+Sunday can send summaries through Telegram, WhatsApp, or iMessage.
 
 ### Telegram
 
-1. Message `@BotFather` on Telegram → `/newbot`
-2. Copy the token
-3. Message your bot once, then get your chat ID from `api.telegram.org/bot<token>/getUpdates`
+Telegram is the easiest messaging path for both Hosted and Self-hosted backends.
+
+1. Install Telegram and sign in
+2. Message `@BotFather`
+3. Run `/newbot`
+4. Copy the bot token
+5. Send at least one message to your new bot from the account that should receive Sunday alerts
+6. Open:
+
+```text
+https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+```
+
+7. Copy the numeric `chat.id` from the response
+8. Set:
 
 ```env
-TELEGRAM_BOT_TOKEN=your_token
+MESSAGE_CHANNEL=Telegram
+TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
 ```
 
----
+### WhatsApp
 
-## Agent Mode
+Sunday uses Meta's WhatsApp Cloud API, not Twilio.
 
-Controls what Sunday does after processing an email or voice note.
+1. Create a Meta developer app
+2. Add the WhatsApp product
+3. Open the WhatsApp API setup page
+4. Copy:
+   - access token
+   - phone number ID
+5. Add your recipient/test number in the Meta dashboard if you are still in test mode
+6. Set:
 
 ```env
-AGENT_MODE=off       # just send the summary (default)
-AGENT_MODE=builtin   # Sunday calls the LLM with web search, sends insight
-AGENT_MODE=openclaw  # push to your local OpenClaw agent
+MESSAGE_CHANNEL=WhatsApp
+WHATSAPP_ACCESS_TOKEN=your_meta_access_token
+WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
+WHATSAPP_RECIPIENT=12175551234
+WHATSAPP_GRAPH_API_VERSION=v23.0
 ```
 
-`builtin` works with any configured LLM provider — no OpenClaw needed.
+Notes:
+
+- `WHATSAPP_RECIPIENT` should be digits only, with country code, no spaces or `+`
+- WhatsApp works on Hosted and Self-hosted backends
+- If messages fail in test mode, make sure the destination number is added as an allowed recipient in Meta
+
+### iMessage
+
+iMessage is for local macOS backends only.
+
+1. Install the helper:
+
+```bash
+brew install steipete/tap/imsg
+```
+
+2. Grant Terminal or your shell app Full Disk Access in macOS privacy settings
+3. Set:
+
+```env
+MESSAGE_CHANNEL=iMessage
+IMESSAGE_ENABLED=true
+IMESSAGE_RECIPIENT=+12175551234
+TEXT_EMAIL_LINKS=true
+```
+
+Important:
+
+- iMessage does not work on Hosted backends
+- iMessage requires macOS
 
 ---
 
-## Configuration Guide
+## LLM providers
 
-Full list of settings — all editable in `config.env` or via the app Settings screen.
+Set `ACTIVE_LLM_PROVIDER` to one of the supported providers.
 
-| Key | Description |
+| Provider | Key env var | Notes |
+|---|---|---|
+| `groq` | `GROQ_API_KEY` | Recommended hosted default; also powers hosted transcription |
+| `gemini` | `GEMINI_API_KEY` | Good free tier |
+| `openrouter` | `OPENROUTER_API_KEY` | Good for model experimentation |
+| `ollama` | none | Best for fully local/self-hosted |
+| `mistral` | `MISTRAL_API_KEY` | Cloud option |
+| `cerebras` | `CEREBRAS_API_KEY` | Cloud option |
+| `together` | `TOGETHER_API_KEY` | Cloud option |
+| `custom` | `CUSTOM_LLM_BASE_URL`, `CUSTOM_LLM_API_KEY`, `CUSTOM_LLM_MODEL` | OpenAI-compatible endpoint |
+
+If you want the least setup on Railway, use Groq.
+
+---
+
+## OpenClaw integration
+
+OpenClaw is optional. When enabled, Sunday can hand action items from emails or voice notes to your local agent.
+
+### How it works
+
+```text
+Sunday processes an email or voice note
+  -> action items are extracted
+  -> Sunday POSTs a wake hook to OpenClaw
+  -> OpenClaw runs locally on your Mac
+  -> OpenClaw responds through your configured channel
+```
+
+### Setup
+
+1. Install OpenClaw on your Mac
+2. Configure your preferred model inside OpenClaw
+3. Enable Tailscale if Railway needs to reach it remotely
+4. Set:
+
+```env
+AGENT_MODE=openclaw
+OPENCLAW_ENABLED=true
+OPENCLAW_BASE_URL=https://your-mac.tailnet.ts.net:18789
+OPENCLAW_TOKEN=your-openclaw-hook-token
+```
+
+If you do not need OpenClaw, leave `AGENT_MODE=off` or use `AGENT_MODE=builtin`.
+
+---
+
+## Agent mode
+
+`AGENT_MODE` controls what Sunday does after processing an email or voice note.
+
+```env
+AGENT_MODE=off
+AGENT_MODE=builtin
+AGENT_MODE=openclaw
+```
+
+What each mode means:
+
+- `off`: send the normal summary only
+- `builtin`: Sunday calls the active LLM directly and can add deeper follow-up
+- `openclaw`: Sunday forwards action items to your OpenClaw agent
+
+---
+
+## Configuration guide
+
+The most important settings are editable in `config.env` and through the app's Settings screen.
+
+| Key | What it controls |
 |---|---|
-| `ACTIVE_LLM_PROVIDER` | Which LLM to use |
-| `TARGET_CALENDAR_ID` | Calendar Sunday writes events to (`primary` = default) |
-| `DEFAULT_HOME_LOCATION` | Used for travel estimates |
-| `WORK_DAYS` | Comma-separated: `mon,tue,wed,thu,fri` |
-| `WORKDAY_START_TIME` | HH:MM 24h format |
-| `WORKDAY_END_TIME` | HH:MM 24h format |
-| `TRAVEL_TYPE` | `driving`, `walking`, `bicycling`, `transit` |
+| `BACKEND_TARGET` | `Hosted` for Railway, `Self-hosted` for your Mac |
+| `VERCEL_BASE_URL` | Legacy setting name for the hosted backend URL; use your Railway URL here |
+| `SUNDAY_API_KEY` | Shared bearer token for app-to-backend requests |
+| `ACTIVE_LLM_PROVIDER` | Which LLM Sunday uses |
+| `GOOGLE_MAPS_API_KEY` | Travel time estimation |
+| `TARGET_CALENDAR_ID` | Which Google Calendar Sunday writes to |
+| `MESSAGE_CHANNEL` | `Telegram`, `WhatsApp`, or `iMessage` |
+| `GMAIL_LABELS` | Which Gmail labels/categories Sunday watches |
+| `DEFAULT_HOME_LOCATION` | Used for travel estimates and planning |
+| `WORK_DAYS` | Comma-separated workdays such as `mon,tue,wed,thu,fri` |
+| `WORKDAY_START_TIME` | Start of the workday |
+| `WORKDAY_END_TIME` | End of the workday |
+| `TRAVEL_TYPE` | `driving`, `walking`, `bicycling`, or `transit` |
 | `PREP_TIME_MINUTES` | Buffer before in-person events |
 | `ONLINE_PREP_MINUTES` | Buffer before online events |
-| `GMAIL_LABELS` | Labels to watch: `CATEGORY_PRIMARY`, `INBOX`, custom labels |
-| `POLL_INTERVAL_SECONDS` | How often to check Gmail |
-| `MAX_EMAILS_PER_CYCLE` | Max emails processed per poll |
-| `AGENT_MODE` | `off`, `builtin`, `openclaw` |
-| `AUTO_CLEANUP_HOURS` | Delete managed events older than N hours |
-| `TIMEZONE` | e.g. `America/Chicago` |
-| `LLM_MAX_TOKENS` | Max tokens per LLM call |
-| `LLM_TEMPERATURE` | LLM temperature (0.0–1.0) |
-| `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `AUTO_CLEANUP_HOURS` | When Sunday cleans up old managed events |
+| `TIMEZONE` | IANA timezone such as `America/Chicago` |
+| `AGENT_MODE` | `off`, `builtin`, or `openclaw` |
+
+Frontend env keys in `sunday-app/.env`:
+
+| Key | What it controls |
+|---|---|
+| `EXPO_PUBLIC_API_BASE_URL` | Primary backend URL the app should call |
+| `EXPO_PUBLIC_API_FALLBACK_URLS` | Optional extra backend candidates |
+| `EXPO_PUBLIC_API_TOKEN` | Should match `SUNDAY_API_KEY` when the backend is protected |
 
 ---
 
-## API Endpoints
+## API endpoints
 
 ### Auth
+
 | Method | Path | Description |
 |---|---|---|
-| POST | `/auth/signup` | Create account |
-| POST | `/auth/login` | Log in |
-| POST | `/auth/demo` | Demo login (no account needed) |
-| GET | `/auth/google` | Start Google OAuth web flow |
-| GET | `/auth/google/callback` | Google OAuth callback |
+| `POST` | `/auth/signup` | Create an account |
+| `POST` | `/auth/login` | Log in |
+| `POST` | `/auth/demo` | Demo login |
+| `GET` | `/auth/google` | Start Google auth |
+| `GET` | `/auth/google/callback` | Google auth callback |
 
 ### App
+
 | Method | Path | Description |
 |---|---|---|
-| GET | `/health` | Health check |
-| GET | `/api/status` | Config status |
-| GET | `/api/settings` | Get all settings |
-| PUT | `/api/settings` | Update settings |
-| GET | `/api/events` | Upcoming calendar events with travel |
-| POST | `/api/transcribe` | Upload audio for transcription |
-| POST | `/api/plan-day` | Generate day plan |
-| POST | `/api/location` | Update phone location |
-| POST | `/api/process` | Manually trigger email processing |
+| `GET` | `/health` | Health check |
+| `GET` | `/api/status` | Backend status |
+| `GET` | `/api/settings` | Current app/backend settings |
+| `PUT` | `/api/settings` | Save settings |
+| `GET` | `/api/events` | Upcoming events with travel |
+| `POST` | `/api/transcribe` | Upload audio for transcription |
+| `POST` | `/api/plan-day` | Generate a day plan |
+| `POST` | `/api/location` | Update location |
+| `POST` | `/api/process` | Trigger manual processing |
 
 ---
 
 ## Troubleshooting
 
-### App can't reach backend in Expo Go
+### The web app or Expo Go shows `405` when transcribing
 
-- Check `EXPO_PUBLIC_API_BASE_URL` is your Mac's IP (not localhost)
-- Backend must be running with `--host 0.0.0.0`
-- Phone and Mac must be on the same Wi-Fi — or use Tailscale
+- Your Hosted backend URL is probably pointing at the web frontend instead of the backend API
+- In Sunday, `Hosted backend URL` should be your Railway URL, not your `*.vercel.app` URL
 
-### Transcription fails on Railway
+### Expo Go cannot reach the backend
 
-- Make sure `GROQ_API_KEY` is set in Railway variables
-- Groq Whisper API handles transcription in the cloud — no local model needed
+- Do not use `localhost` from your phone
+- Use your Railway URL for `Hosted`, or your Mac's IP for `Self-hosted`
+- Make sure the backend is started with `--host 0.0.0.0`
+- If the phone is off-network, use Tailscale or Expo tunnel mode
 
-### OpenClaw not receiving webhooks
+### Hosted transcription fails
 
-- Make sure Tailscale is running on your Mac
-- Check `OPENCLAW_BASE_URL` points to your Tailscale IP/hostname
-- Verify `OPENCLAW_TOKEN` matches the token in `~/.openclaw/openclaw.json`
-- Check OpenClaw gateway is running: `openclaw start`
+- Set `GROQ_API_KEY` on Railway
+- Set `EXPO_PUBLIC_API_TOKEN` to match `SUNDAY_API_KEY` if the backend is protected
+- Make sure the frontend is calling Railway, not the Vercel web URL
 
-### "Something went wrong" in iMessage from OpenClaw
+### Telegram messages do not arrive
 
-- OpenClaw's `claude-cli` model requires an active Claude Code session
-- Switch to a direct API model: `openclaw config set agents.defaults.model.primary "anthropic/claude-3-5-haiku-latest"`
-- Or set `AGENT_MODE=builtin` in your config to bypass OpenClaw entirely
+- Make sure you sent at least one message to the bot first
+- Make sure `TELEGRAM_CHAT_ID` came from the same Telegram account you want to receive alerts on
+- Re-check `https://api.telegram.org/bot<token>/getUpdates`
 
-### Google OAuth fails on deployed backend
+### WhatsApp messages do not arrive
 
-- Make sure your OAuth client type is **Web application** (not Desktop app)
-- Add `https://your-railway-url/auth/google/callback` to Authorized redirect URIs
-- Set `GOOGLE_CREDENTIALS_JSON` in Railway (base64-encoded credentials.json)
+- Make sure the destination number is added as a test recipient in Meta if you are still in test mode
+- Make sure `WHATSAPP_RECIPIENT` is digits only with country code
+- Re-check `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_ACCESS_TOKEN`
 
-### Sunday processes promotional emails
+### iMessage is configured but fails on Railway
 
-- Set `GMAIL_LABELS=CATEGORY_PRIMARY` to watch only the Primary inbox tab
-- The LLM prompt filters marketing emails but `CATEGORY_PRIMARY` is the strongest filter
+- That is expected: iMessage is local-macOS-only
+- Switch `MESSAGE_CHANNEL` to `Telegram` or `WhatsApp` for Hosted backends
+
+### Google auth on a hosted backend is flaky
+
+- Do the Google OAuth flow locally once
+- Copy `credentials.json` and `token.json` into `GOOGLE_CREDENTIALS_JSON` and `GOOGLE_TOKEN_JSON`
+- Hosted backends are much more reliable with pre-generated Google tokens than with interactive OAuth
+
+### Sunday processes too many newsletters or promos
+
+- Set `GMAIL_LABELS=CATEGORY_PRIMARY`
+- That is the strongest filter if you only want primary-inbox mail

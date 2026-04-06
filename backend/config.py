@@ -341,7 +341,7 @@ class Config:
 
         if os.environ.get("VERCEL") and not os.environ.get("GOOGLE_TOKEN_JSON"):
             errors.append(
-                "GOOGLE_TOKEN_JSON must be configured on Vercel because the OAuth browser flow "
+                "GOOGLE_TOKEN_JSON must be configured on a hosted backend because the OAuth browser flow "
                 "cannot run in serverless execution."
             )
 
@@ -363,7 +363,7 @@ class Config:
             errors.append("BACKEND_TARGET must be either Self-hosted or Hosted.")
         if cls.backend_target == "Hosted" and not cls.vercel_base_url:
             warnings.append(
-                "VERCEL_BASE_URL is empty while BACKEND_TARGET is set to Hosted."
+                "Railway backend URL is empty while BACKEND_TARGET is set to Hosted."
             )
 
         valid_message_channels = {"iMessage", "Telegram", "WhatsApp"}
