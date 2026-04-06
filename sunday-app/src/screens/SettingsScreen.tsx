@@ -125,6 +125,7 @@ const CONNECTED_AGENT_OPTIONS = [
 const MESSAGE_CHANNEL_OPTIONS = ["iMessage", "Telegram", "WhatsApp"] as const;
 const BACKEND_OPTIONS = ["Self-hosted", "Hosted"] as const;
 const DEFAULT_HOSTED_BACKEND_URL = "https://sundayramp-production.up.railway.app";
+const DEFAULT_BACKEND_TARGET = Platform.OS === "web" ? "Hosted" : "Self-hosted";
 const RECOMMENDED_TRANSCRIPTION_MODEL = "ggml-small.en-q5_1";
 const RECOMMENDED_SUMMARIZATION_MODEL = "qwen2.5-0.5b-instruct";
 const LLM_PROVIDER_OPTIONS = [
@@ -858,7 +859,7 @@ function getInitialSettingsState() {
     values[group.longitudeKey] = "";
   }
   values.CONNECTION_AGENT = "Ollama";
-  values.BACKEND_TARGET = Platform.OS === "web" ? "Hosted" : "Self-hosted";
+  values.BACKEND_TARGET = DEFAULT_BACKEND_TARGET;
   values.VERCEL_BASE_URL = DEFAULT_HOSTED_BACKEND_URL;
   values.MESSAGE_CHANNEL = "Telegram";
   return values;
@@ -1064,8 +1065,8 @@ export function SettingsScreen() {
   const [summarizationModel, setSummarizationModel] = React.useState("qwen2.5-0.5b-instruct");
   const [transcriptionModelOptions, setTranscriptionModelOptions] = React.useState<string[]>([]);
   const [summarizationModelOptions, setSummarizationModelOptions] = React.useState<string[]>([]);
-  const [backendTarget, setBackendTarget] = React.useState("Self-hosted");
-  const [vercelBaseUrl, setVercelBaseUrl] = React.useState("");
+  const [backendTarget, setBackendTarget] = React.useState(DEFAULT_BACKEND_TARGET);
+  const [vercelBaseUrl, setVercelBaseUrl] = React.useState(DEFAULT_HOSTED_BACKEND_URL);
   const lastSavedSettingsRef = React.useRef("");
   const hasLoadedSettingsRef = React.useRef(false);
   const saveSequenceRef = React.useRef(0);
