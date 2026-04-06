@@ -488,7 +488,7 @@ function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]
           />
         </View>
         <View style={styles.page}>
-          <AlertsScreen entries={alertEntries} onDeleteEntry={handleDeleteAlert} />
+          <AlertsScreen entries={alertEntries} isDemo={isDemo} onDeleteEntry={handleDeleteAlert} />
         </View>
       </ScrollView>
 

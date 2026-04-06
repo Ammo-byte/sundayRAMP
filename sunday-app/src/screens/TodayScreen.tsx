@@ -356,27 +356,27 @@ function makeDemoEvents(): CalendarEvent[] {
   const d = todayIso();
   return [
     {
-      id: "demo-1",
+      id: "demo-voice-created",
       calendar_id: "demo",
       calendar_name: "Personal",
       calendar_default_color: "#7ec8ff",
-      title: "Coffee with Aamodit",
-      location: "Sinco Coffee, New York, NY",
-      start_iso: `${d}T09:30:00`,
-      end_iso: `${d}T10:30:00`,
-      travel_minutes: 15,
-      travel_mode: "walking",
-      leave_by_iso: `${d}T09:12:00`,
+      title: "Product review with Sarah",
+      location: "Shopify Toronto, 620 King St W",
+      start_iso: `${d}T14:00:00`,
+      end_iso: `${d}T15:00:00`,
+      travel_minutes: 18,
+      travel_mode: "transit",
+      leave_by_iso: `${d}T13:32:00`,
       is_online: false,
       is_all_day: false,
       meeting_link: null,
-      description: null,
+      description: "Demo voice note created this event automatically.",
       attendees: [],
       notes: null,
       travel: {
-        driving: { minutes: 7, text: "7 min" },
-        transit: { minutes: 12, text: "12 min" },
-        walking: { minutes: 15, text: "15 min" },
+        driving: { minutes: 11, text: "11 min" },
+        transit: { minutes: 18, text: "18 min" },
+        walking: { minutes: 27, text: "27 min" },
       },
     },
     {
@@ -394,9 +394,13 @@ function makeDemoEvents(): CalendarEvent[] {
       is_online: true,
       is_all_day: false,
       meeting_link: "https://meet.google.com/demo-standup",
-      description: null,
-      attendees: [],
-      notes: null,
+      description: "Daily launch standup with product, design, and engineering. Sunday can surface the meeting link, attendee context, and the running agenda.",
+      attendees: [
+        { name: "Sarah Kim", email: "sarah@example.com", response_status: "accepted" },
+        { name: "Priya Patel", email: "priya@example.com", response_status: "accepted" },
+        { name: "Marcus Lee", email: "marcus@example.com", response_status: "accepted" },
+      ],
+      notes: "Agenda: Expo Go transcription fix, hosted backend defaults, and launch blockers. Prep note: open the bug board before the call.",
       travel: null,
     },
     {
@@ -406,24 +410,93 @@ function makeDemoEvents(): CalendarEvent[] {
       calendar_default_color: "#fbbf24",
       title: "Dentist",
       location: "123 5th Ave, New York, NY",
-      start_iso: `${d}T15:00:00`,
-      end_iso: `${d}T16:00:00`,
+      start_iso: `${d}T16:00:00`,
+      end_iso: `${d}T17:00:00`,
       travel_minutes: 22,
       travel_mode: "transit",
-      leave_by_iso: `${d}T14:33:00`,
+      leave_by_iso: `${d}T15:33:00`,
       is_online: false,
       is_all_day: false,
       meeting_link: null,
-      description: null,
-      attendees: [],
-      notes: null,
+      description: "Quarterly cleaning with Dr. Chen. Sunday can keep the address, travel timing, and appointment prep in one place.",
+      attendees: [{ name: "Dr. Emily Chen", email: "frontdesk@chelseadental.com", response_status: "accepted" }],
+      notes: "Bring insurance card and night guard. Health forms already completed. Leave buffer for rush-hour transit.",
       travel: {
-        driving: { minutes: 12, text: "12 min" },
+        driving: { minutes: 14, text: "14 min" },
         transit: { minutes: 22, text: "22 min" },
-        walking: { minutes: 41, text: "41 min" },
+        walking: { minutes: 39, text: "39 min" },
+      },
+    },
+    {
+      id: "demo-4",
+      calendar_id: "demo",
+      calendar_name: "Personal",
+      calendar_default_color: "#fb7185",
+      title: "Gym session",
+      location: "Equinox Yorkville, Toronto",
+      start_iso: `${d}T18:15:00`,
+      end_iso: `${d}T19:15:00`,
+      travel_minutes: 16,
+      travel_mode: "walking",
+      leave_by_iso: `${d}T17:57:00`,
+      is_online: false,
+      is_all_day: false,
+      meeting_link: null,
+      description: "Strength block plus 15 minutes of mobility. Sunday can remind you what to pack and when to leave from your last appointment.",
+      attendees: [],
+      notes: "Pack shoes, lock, and protein bar. Locker code 247. Today is lower-body day.",
+      travel: {
+        driving: { minutes: 7, text: "7 min" },
+        transit: { minutes: 13, text: "13 min" },
+        walking: { minutes: 16, text: "16 min" },
+      },
+    },
+    {
+      id: "demo-5",
+      calendar_id: "demo",
+      calendar_name: "Personal",
+      calendar_default_color: "#c084fc",
+      title: "Movie night with Maya and Chris",
+      location: "TIFF Lightbox, Toronto",
+      start_iso: `${d}T20:30:00`,
+      end_iso: `${d}T22:45:00`,
+      travel_minutes: 12,
+      travel_mode: "transit",
+      leave_by_iso: `${d}T20:08:00`,
+      is_online: false,
+      is_all_day: false,
+      meeting_link: null,
+      description: "Tickets are booked and shared. Sunday can keep the ticket details, attendees, and route together before you head out.",
+      attendees: [
+        { name: "Maya Singh", email: "maya@example.com", response_status: "accepted" },
+        { name: "Chris Wong", email: "chris@example.com", response_status: "accepted" },
+      ],
+      notes: "Seats G12-G14. Tickets were sent to the group chat. Meet in the lobby 10 minutes early.",
+      travel: {
+        driving: { minutes: 9, text: "9 min" },
+        transit: { minutes: 12, text: "12 min" },
+        walking: { minutes: 24, text: "24 min" },
       },
     },
   ];
+}
+
+function DemoWalkthroughCard() {
+  return (
+    <View style={styles.demoCard}>
+      <Text style={styles.demoEyebrow}>Demo walkthrough</Text>
+      <Text style={styles.demoTitle}>What this screen would do with your real account</Text>
+      <Text style={styles.demoBody}>
+        Sunday would pull your live Google Calendar here, add events created from voice notes,
+        and calculate leave-by times from your location and Maps.
+      </Text>
+      <View style={styles.demoSteps}>
+        <Text style={styles.demoStep}>1. Record a note with a concrete event, like a meeting at 2 PM.</Text>
+        <Text style={styles.demoStep}>2. Sunday transcribes it, extracts the event, and writes it to Google Calendar.</Text>
+        <Text style={styles.demoStep}>3. The new meeting appears here with travel timing, directions, and details.</Text>
+      </View>
+    </View>
+  );
 }
 
 export function TodayScreen({ isDemo = false }: { isDemo?: boolean }) {
@@ -824,6 +897,7 @@ export function TodayScreen({ isDemo = false }: { isDemo?: boolean }) {
               </Pressable>
             </View>
             <Text style={styles.greeting}>{greeting}</Text>
+            {isDemo ? <DemoWalkthroughCard /> : null}
           </View>
         }
         ListEmptyComponent={
@@ -1222,6 +1296,45 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: FONTS.regular,
     marginTop: 4,
+  },
+  demoCard: {
+    marginTop: 18,
+    borderRadius: 20,
+    backgroundColor: "#1f1f1f",
+    borderWidth: 1,
+    borderColor: "#2d2d2d",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  demoEyebrow: {
+    color: "#8ab4ff",
+    fontSize: 12,
+    fontFamily: FONTS.medium,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  demoTitle: {
+    color: "#f5f5f5",
+    fontSize: 18,
+    lineHeight: 23,
+    fontFamily: FONTS.semibold,
+  },
+  demoBody: {
+    color: "#d0d0d0",
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.regular,
+  },
+  demoSteps: {
+    gap: 6,
+    marginTop: 2,
+  },
+  demoStep: {
+    color: "#e3e3e3",
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.regular,
   },
   separator: {
     height: 10,

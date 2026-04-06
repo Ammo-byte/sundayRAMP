@@ -34,6 +34,7 @@ const DELETE_EXIT_OFFSET = Dimensions.get("window").width + 80;
 
 type AlertsScreenProps = {
   entries: AlertEntry[];
+  isDemo?: boolean;
   onDeleteEntry?: (entryId: string) => void;
 };
 
@@ -289,6 +290,23 @@ function renderEmptyState() {
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>No transcriptions yet</Text>
       <Text style={styles.emptyBody}>Recorded notes will show up here.</Text>
+    </View>
+  );
+}
+
+function DemoWalkthroughPanel() {
+  return (
+    <View style={styles.demoPanel}>
+      <Text style={styles.demoPanelEyebrow}>Demo walkthrough</Text>
+      <Text style={styles.demoPanelTitle}>Open the first entry to see the full voice-note flow</Text>
+      <Text style={styles.demoPanelBody}>
+        In a real connected setup, Sunday would transcribe the recording, extract actions, write the event to Google Calendar, and optionally send the follow-up message.
+      </Text>
+      <View style={styles.demoPanelSteps}>
+        <Text style={styles.demoPanelStep}>1. Tap “Voice note: booked product review for 2 PM.”</Text>
+        <Text style={styles.demoPanelStep}>2. Read the spoken transcript and review the extracted actions.</Text>
+        <Text style={styles.demoPanelStep}>3. Notice the “Done” badges showing what would have been executed automatically.</Text>
+      </View>
     </View>
   );
 }
@@ -701,7 +719,7 @@ function AlertRow({ item, onOpenEntry, onDeleteEntry }: AlertRowProps) {
   );
 }
 
-export function AlertsScreen({ entries, onDeleteEntry }: AlertsScreenProps) {
+export function AlertsScreen({ entries, isDemo = false, onDeleteEntry }: AlertsScreenProps) {
   const insets = useSafeAreaInsets();
   const headerTopInset = insets.top + 8;
   const [selectedEntryId, setSelectedEntryId] = React.useState<string | null>(null);
@@ -734,6 +752,7 @@ export function AlertsScreen({ entries, onDeleteEntry }: AlertsScreenProps) {
         ListHeaderComponent={(
           <View style={[styles.header, { paddingTop: headerTopInset }]}>
             <Text style={styles.headerTitle}>Entries</Text>
+            {isDemo ? <DemoWalkthroughPanel /> : null}
           </View>
         )}
         ListEmptyComponent={renderEmptyState}
@@ -777,6 +796,45 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 28,
     fontFamily: FONTS.semibold,
+  },
+  demoPanel: {
+    marginTop: 18,
+    borderRadius: 20,
+    backgroundColor: "#1f1f1f",
+    borderWidth: 1,
+    borderColor: "#2d2d2d",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  demoPanelEyebrow: {
+    color: "#8ab4ff",
+    fontSize: 12,
+    fontFamily: FONTS.medium,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  demoPanelTitle: {
+    color: "#f5f5f5",
+    fontSize: 18,
+    lineHeight: 23,
+    fontFamily: FONTS.semibold,
+  },
+  demoPanelBody: {
+    color: "#d0d0d0",
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: FONTS.regular,
+  },
+  demoPanelSteps: {
+    gap: 6,
+    marginTop: 2,
+  },
+  demoPanelStep: {
+    color: "#e3e3e3",
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONTS.regular,
   },
   emptyState: {
     flex: 1,
