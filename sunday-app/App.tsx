@@ -122,7 +122,6 @@ function Main() {
   const [activeIndex, setActiveIndex] = React.useState(INITIAL_INDEX);
   const [navVisible, setNavVisible] = React.useState(true);
   const [isRecordingActive, setIsRecordingActive] = React.useState(false);
-  const [isPagerScrollLocked, setIsPagerScrollLocked] = React.useState(false);
   const [alertEntries, setAlertEntries] = React.useState<AlertEntry[]>([]);
   const [entriesHydrated, setEntriesHydrated] = React.useState(false);
   const indicatorTranslateX = React.useMemo(
@@ -421,7 +420,6 @@ function Main() {
         horizontal
         pagingEnabled
         bounces={false}
-        scrollEnabled={!isPagerScrollLocked}
         decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
@@ -433,9 +431,7 @@ function Main() {
         onMomentumScrollEnd={handleMomentumEnd}
         contentOffset={{ x: INITIAL_INDEX * SCREEN_WIDTH, y: 0 }}
       >
-        <View style={styles.page}>
-          <SettingsScreen onSegmentInteractionChange={setIsPagerScrollLocked} />
-        </View>
+        <View style={styles.page}><SettingsScreen /></View>
         <View style={styles.page}>
           <TodayScreen />
         </View>
