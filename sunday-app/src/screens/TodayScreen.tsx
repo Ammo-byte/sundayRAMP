@@ -348,7 +348,85 @@ function EventCard({
   );
 }
 
-export function TodayScreen() {
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function makeDemoEvents(): CalendarEvent[] {
+  const d = todayIso();
+  return [
+    {
+      id: "demo-1",
+      calendar_id: "demo",
+      calendar_name: "Personal",
+      calendar_default_color: "#7ec8ff",
+      title: "Coffee with Aamodit",
+      location: "Sinco Coffee, New York, NY",
+      start_iso: `${d}T09:30:00`,
+      end_iso: `${d}T10:30:00`,
+      travel_minutes: 15,
+      travel_mode: "walking",
+      leave_by_iso: `${d}T09:12:00`,
+      is_online: false,
+      is_all_day: false,
+      meeting_link: null,
+      description: null,
+      attendees: [],
+      notes: null,
+      travel: {
+        driving: { minutes: 7, text: "7 min" },
+        transit: { minutes: 12, text: "12 min" },
+        walking: { minutes: 15, text: "15 min" },
+      },
+    },
+    {
+      id: "demo-2",
+      calendar_id: "demo",
+      calendar_name: "Work",
+      calendar_default_color: "#8af0c1",
+      title: "Team Standup",
+      location: null,
+      start_iso: `${d}T11:00:00`,
+      end_iso: `${d}T11:30:00`,
+      travel_minutes: null,
+      travel_mode: "driving",
+      leave_by_iso: null,
+      is_online: true,
+      is_all_day: false,
+      meeting_link: "https://meet.google.com/demo-standup",
+      description: null,
+      attendees: [],
+      notes: null,
+      travel: null,
+    },
+    {
+      id: "demo-3",
+      calendar_id: "demo",
+      calendar_name: "Personal",
+      calendar_default_color: "#fbbf24",
+      title: "Dentist",
+      location: "123 5th Ave, New York, NY",
+      start_iso: `${d}T15:00:00`,
+      end_iso: `${d}T16:00:00`,
+      travel_minutes: 22,
+      travel_mode: "transit",
+      leave_by_iso: `${d}T14:33:00`,
+      is_online: false,
+      is_all_day: false,
+      meeting_link: null,
+      description: null,
+      attendees: [],
+      notes: null,
+      travel: {
+        driving: { minutes: 12, text: "12 min" },
+        transit: { minutes: 22, text: "22 min" },
+        walking: { minutes: 41, text: "41 min" },
+      },
+    },
+  ];
+}
+
+export function TodayScreen({ isDemo = false }: { isDemo?: boolean }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const headerTopInset = insets.top + 8;
@@ -376,6 +454,16 @@ export function TodayScreen() {
   const eventSheetModeRef = React.useRef<"half" | "full">("half");
 
   const loadEvents = React.useCallback(async () => {
+    if (isDemo) {
+      setEvents(makeDemoEvents());
+      setCalendars([
+        { id: "demo", name: "Personal", default_color: "#7ec8ff" },
+        { id: "demo-work", name: "Work", default_color: "#8af0c1" },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await fetchApi(
         "/api/events",
@@ -399,7 +487,7 @@ export function TodayScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isDemo]);
 
   React.useEffect(() => {
     void loadEvents();

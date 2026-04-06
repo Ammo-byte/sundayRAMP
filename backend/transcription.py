@@ -5,99 +5,127 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import httpx
+
 from .config import Config
 
 
 class TranscriptionError(RuntimeError):
-    """Raised when local speech transcription fails."""
+    """Raised when speech transcription fails."""
 
 
 def _normalize_transcript(text: str) -> str:
-    """Collapse the model output into a clean single-line transcript."""
     parts = [line.strip() for line in text.splitlines() if line.strip()]
     return " ".join(parts).strip()
 
 
+# ── Groq Whisper API (cloud, no model file needed) ────────────────────────────
+
+def _transcribe_via_groq(source: Path) -> str:
+    """Transcribe using Groq's hosted Whisper API."""
+    api_key = os.getenv("GROQ_API_KEY", "")
+    if not api_key:
+        raise TranscriptionError("GROQ_API_KEY is not set.")
+
+    with open(source, "rb") as f:
+        audio_bytes = f.read()
+
+    suffix = source.suffix or ".m4a"
+    mime = (
+        "audio/webm" if suffix in {".webm", ".weba"}
+        else "audio/wav" if suffix == ".wav"
+        else "audio/mpeg" if suffix == ".mp3"
+        else "audio/mp4"
+    )
+
+    response = httpx.post(
+        "https://api.groq.com/openai/v1/audio/transcriptions",
+        headers={"Authorization": f"Bearer {api_key}"},
+        data={"model": "whisper-large-v3-turbo", "language": Config.transcription_language},
+        files={"file": (source.name, audio_bytes, mime)},
+        timeout=60,
+    )
+
+    if response.status_code != 200:
+        raise TranscriptionError(f"Groq transcription failed: {response.text}")
+
+    text = response.json().get("text", "").strip()
+    if not text:
+        raise TranscriptionError("Groq returned an empty transcript.")
+    return text
+
+
+# ── Local whisper.cpp (fallback when model file exists) ───────────────────────
+
 def _run_checked_command(command: list[str], label: str) -> None:
-    """Run a subprocess and raise a helpful error when it fails."""
     try:
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
     except FileNotFoundError as exc:
         raise TranscriptionError(f"{label} is not installed or not on PATH.") from exc
 
-    if completed.returncode == 0:
-        return
-
-    stderr = completed.stderr.strip()
-    stdout = completed.stdout.strip()
-    detail = stderr or stdout or f"{label} exited with status {completed.returncode}."
-    raise TranscriptionError(f"{label} failed: {detail}")
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise TranscriptionError(f"{label} failed: {detail}")
 
 
-def _ffmpeg_command(source: Path, destination: Path) -> list[str]:
-    return [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(source),
-        "-ar",
-        "16000",
-        "-ac",
-        "1",
-        "-c:a",
-        "pcm_s16le",
-        str(destination),
-    ]
+def _ffmpeg_to_wav(source: Path, destination: Path) -> None:
+    _run_checked_command([
+        "ffmpeg", "-y", "-i", str(source),
+        "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(destination),
+    ], "ffmpeg")
 
 
-def _whisper_command(source: Path, output_prefix: Path) -> list[str]:
+def _whisper_local(source: Path, output_prefix: Path) -> None:
     threads = max(1, min(Config.transcription_threads, os.cpu_count() or 4))
-    return [
+    _run_checked_command([
         "whisper-cpp",
-        "-m",
-        Config.transcription_model_path,
+        "-m", Config.transcription_model_path,
         str(source),
-        "-l",
-        Config.transcription_language,
-        "-t",
-        str(threads),
-        "-otxt",
-        "-of",
-        str(output_prefix),
-        "-nt",
-        "-np",
-    ]
+        "-l", Config.transcription_language,
+        "-t", str(threads),
+        "-otxt", "-of", str(output_prefix),
+        "-nt", "-np",
+    ], "whisper-cpp")
 
 
-def transcribe_audio_file(source: str | Path) -> str:
-    """Convert an uploaded audio file to WAV and transcribe it locally."""
-    source_path = Path(source)
-    if not source_path.exists():
-        raise TranscriptionError(f"Audio file not found: {source_path}")
-
+def _transcribe_locally(source: Path) -> str:
     model_path = Path(Config.transcription_model_path)
     if not model_path.exists():
         raise TranscriptionError(f"Speech model not found: {model_path}")
 
-    with tempfile.TemporaryDirectory(prefix="sunday-transcription-") as temp_dir:
-        temp_root = Path(temp_dir)
-        wav_path = temp_root / "recording.wav"
-        output_prefix = temp_root / "transcript"
+    with tempfile.TemporaryDirectory(prefix="sunday-transcription-") as tmp:
+        tmp_root = Path(tmp)
+        wav_path = tmp_root / "recording.wav"
+        output_prefix = tmp_root / "transcript"
 
-        _run_checked_command(_ffmpeg_command(source_path, wav_path), "ffmpeg")
-        _run_checked_command(_whisper_command(wav_path, output_prefix), "whisper-cpp")
+        _ffmpeg_to_wav(source, wav_path)
+        _whisper_local(wav_path, output_prefix)
 
         transcript_path = output_prefix.with_suffix(".txt")
         if not transcript_path.exists():
             raise TranscriptionError("whisper-cpp did not produce a transcript file.")
 
-        transcript = _normalize_transcript(transcript_path.read_text())
-        if not transcript:
+        text = _normalize_transcript(transcript_path.read_text())
+        if not text:
             raise TranscriptionError("No speech was transcribed from the recording.")
+        return text
 
-        return transcript
+
+# ── Public entry point ────────────────────────────────────────────────────────
+
+def transcribe_audio_file(source: str | Path) -> str:
+    """
+    Transcribe an audio file.
+
+    Priority:
+      1. Groq Whisper API  — if GROQ_API_KEY is set (cloud, no model needed)
+      2. Local whisper.cpp — if model file exists on disk
+    """
+    source_path = Path(source)
+    if not source_path.exists():
+        raise TranscriptionError(f"Audio file not found: {source_path}")
+
+    if os.getenv("GROQ_API_KEY"):
+        return _transcribe_via_groq(source_path)
+
+    return _transcribe_locally(source_path)

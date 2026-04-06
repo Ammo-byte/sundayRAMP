@@ -64,8 +64,8 @@ const NAV_CONTENT_WIDTH = NAV_WIDTH - NAV_HORIZONTAL_PADDING * 2;
 const NAV_ITEM_WIDTH = (NAV_WIDTH - NAV_HORIZONTAL_PADDING * 2) / TABS.length;
 const INDICATOR_WIDTH = NAV_ITEM_WIDTH - INDICATOR_HORIZONTAL_INSET * 2;
 const INDICATOR_EDGE_EXTENSION = 8;
-const RECORD_TAB_INDEX = 1;
-const ALERTS_TAB_INDEX = 2;
+const RECORD_TAB_INDEX = 2;
+const ALERTS_TAB_INDEX = 3;
 
 function getIndicatorTarget(index: number) {
   if (index === 0 || index === TABS.length - 1) {
@@ -115,7 +115,7 @@ function RecordTabIcon({
   );
 }
 
-function Main({ seedEntries = [] }: { seedEntries?: AlertEntry[] }) {
+function Main({ seedEntries = [], isDemo = false }: { seedEntries?: AlertEntry[]; isDemo?: boolean }) {
   const insets = useSafeAreaInsets();
   const scrollRef = React.useRef<ScrollView>(null);
   const scrollX = React.useRef(new Animated.Value(INITIAL_INDEX * SCREEN_WIDTH)).current;
@@ -444,7 +444,7 @@ function Main({ seedEntries = [] }: { seedEntries?: AlertEntry[] }) {
       >
         <View style={styles.page}><SettingsScreen /></View>
         <View style={styles.page}>
-          <TodayScreen />
+          <TodayScreen isDemo={isDemo} />
         </View>
         <View style={styles.page}>
           <HomeScreen
@@ -547,19 +547,22 @@ export default function App() {
 
   const [authChecked, setAuthChecked] = React.useState(false);
   const [authed, setAuthed] = React.useState(false);
+  const [isDemo, setIsDemo] = React.useState(false);
   const [seedEntries, setSeedEntries] = React.useState<AlertEntry[]>([]);
 
   React.useEffect(() => {
     getAuthState().then((state) => {
       setAuthed(!!state);
+      setIsDemo(state?.isDemo ?? false);
       setAuthChecked(true);
     });
   }, []);
 
   const handleAuth = React.useCallback(
-    async (token: string, isDemo: boolean, demoEntries?: object[]) => {
-      await saveAuthState(token, isDemo);
-      if (isDemo && demoEntries?.length) {
+    async (token: string, demo: boolean, demoEntries?: object[]) => {
+      await saveAuthState(token, demo);
+      setIsDemo(demo);
+      if (demo && demoEntries?.length) {
         setSeedEntries(demoEntries as AlertEntry[]);
       }
       setAuthed(true);
@@ -574,7 +577,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
       <SafeAreaProvider>
-        {authed ? <Main seedEntries={seedEntries} /> : <AuthScreen onAuth={handleAuth} />}
+        {authed ? <Main seedEntries={seedEntries} isDemo={isDemo} /> : <AuthScreen onAuth={handleAuth} />}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
