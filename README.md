@@ -669,3 +669,6 @@ Frontend env keys in `sunday-app/.env`:
 
 - Set `GMAIL_LABELS=CATEGORY_PRIMARY`
 - That is the strongest filter if you only want primary-inbox mail
+
+## Sunday demo video
+- https://canva.link/f76fzz1qva04444
